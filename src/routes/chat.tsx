@@ -155,7 +155,7 @@ function ChatScreen() {
                 Далі: {nextStatusLabel(order.status, lang)}
               </button>
             )}
-            {role === "client" && order.status === "completed" === false && order.escrowHeld && (
+            {role === "client" && order.escrowHeld && (
               <button
                 onClick={releaseEscrow}
                 className="rounded-xl bg-success py-2 text-xs font-bold text-success-foreground"
