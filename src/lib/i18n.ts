@@ -6,124 +6,141 @@ export const LANGS: { code: Lang; label: string; flag: string }[] = [
   { code: "en", label: "ENG", flag: "🇬🇧" },
 ];
 
+export type ViewMode = "client" | "senior" | "master" | "admin";
+
+export const VIEW_MODES: { id: ViewMode; ua: string; ru: string; en: string; icon: string }[] = [
+  { id: "client", ua: "Клієнт (стандарт)", ru: "Клиент (стандарт)", en: "Standard Client", icon: "👤" },
+  { id: "senior", ua: "Режим «Бабуся»", ru: "Режим «Бабушка»", en: "Senior / Grandma mode", icon: "👵" },
+  { id: "master", ua: "Майстер «Дядя Толя»", ru: "Мастер «Дядя Толя»", en: "Uncle Tolya master", icon: "🧰" },
+  { id: "admin", ua: "Адмін / Підтримка", ru: "Админ / Поддержка", en: "Admin / Support", icon: "🛡️" },
+];
+
 type Dict = Record<string, { ua: string; ru: string; en: string }>;
 
 export const t_dict: Dict = {
   appName: { ua: "Handy Pro", ru: "Handy Pro", en: "Handy Pro" },
-  tagline: {
-    ua: "Надійний майстер поруч",
-    ru: "Надёжный мастер рядом",
-    en: "Trusted handyman nearby",
+  tagline: { ua: "Надійний майстер поруч", ru: "Надёжный мастер рядом", en: "Trusted handyman nearby" },
+  testingMode: { ua: "Тестовий режим", ru: "Тестовый режим", en: "Testing mode" },
+
+  // auth
+  signInTitle: { ua: "Увійдіть за номером", ru: "Войдите по номеру", en: "Sign in with phone" },
+  phonePlaceholder: { ua: "+380 __ ___ __ __", ru: "+380 __ ___ __ __", en: "+380 __ ___ __ __" },
+  sendCode: { ua: "Отримати код", ru: "Получить код", en: "Send code" },
+  smsHint: { ua: "Ми надішлемо SMS-код на ваш номер.", ru: "Мы отправим SMS-код на ваш номер.", en: "We'll send a 6-digit SMS code." },
+  legalAgree: { ua: "Я погоджуюсь з Користувацькою угодою", ru: "Я согласен с Пользовательским соглашением", en: "I agree to the User Agreement" },
+  legalSummary: {
+    ua: "Платформа — лише інформаційний посередник (ст. 3, 17 ЗУ «Про електронну комерцію»). Ми не несемо відповідальності за фізичну безпеку, здоровʼя, майно чи будь-які реальні події.",
+    ru: "Платформа — лишь информационный посредник (ст. 3, 17 ЗУ «Об электронной коммерции»). Мы не несём ответственности за физическую безопасность, здоровье, имущество и любые реальные события.",
+    en: "Platform is solely an informational intermediary (Law of Ukraine on E-commerce, Art. 3, 17). It bears ZERO liability for safety, health, property or any real-world events.",
   },
-  client: { ua: "Клієнт", ru: "Клиент", en: "Client" },
-  master: { ua: "Майстер", ru: "Мастер", en: "Master" },
-  login: { ua: "Увійти", ru: "Войти", en: "Sign in" },
-  register: { ua: "Реєстрація", ru: "Регистрация", en: "Register" },
-  name: { ua: "Імʼя", ru: "Имя", en: "Name" },
-  email: { ua: "Email", ru: "Email", en: "Email" },
-  phone: { ua: "Телефон", ru: "Телефон", en: "Phone" },
-  photo: { ua: "Фото майстра", ru: "Фото мастера", en: "Master photo" },
-  uploadPhoto: { ua: "Завантажити фото", ru: "Загрузить фото", en: "Upload photo" },
-  categories: { ua: "Категорії", ru: "Категории", en: "Categories" },
-  pickCategories: {
-    ua: "Оберіть свої спеціалізації",
-    ru: "Выберите специализации",
-    en: "Choose your specializations",
-  },
-  continue: { ua: "Продовжити", ru: "Продолжить", en: "Continue" },
-  search: { ua: "Пошук майстрів та категорій...", ru: "Поиск мастеров и категорий...", en: "Search masters and categories..." },
-  sos: { ua: "SOS — Терміновий виклик", ru: "SOS — Срочный вызов", en: "SOS — Emergency call" },
-  sosHint: {
-    ua: "Розсилка майстрам у радіусі 5 км",
-    ru: "Рассылка мастерам в радиусе 5 км",
-    en: "Broadcasting to masters within 5 km",
-  },
-  sosBroadcasting: {
-    ua: "Шукаємо доступних майстрів...",
-    ru: "Ищем доступных мастеров...",
-    en: "Finding available masters...",
-  },
-  cancel: { ua: "Скасувати", ru: "Отмена", en: "Cancel" },
-  availability: { ua: "Доступність", ru: "Доступность", en: "Availability" },
-  online: { ua: "Готовий до замовлень", ru: "Готов к заказам", en: "Ready for jobs" },
-  busy: { ua: "Зайнятий", ru: "Занят", en: "Busy" },
-  offline: { ua: "Офлайн", ru: "Оффлайн", en: "Offline" },
-  todaysJobs: { ua: "Активні замовлення", ru: "Активные заказы", en: "Active jobs" },
-  earnings: { ua: "Заробіток сьогодні", ru: "Заработок сегодня", en: "Earnings today" },
-  newOrder: { ua: "Нове термінове замовлення", ru: "Новый срочный заказ", en: "New urgent order" },
-  accept: { ua: "Прийняти", ru: "Принять", en: "Accept" },
-  decline: { ua: "Відхилити", ru: "Отклонить", en: "Decline" },
-  map: { ua: "Карта", ru: "Карта", en: "Map" },
-  manualPin: {
-    ua: "Через перешкоди GPS використовуйте ручну прив'язку",
-    ru: "Из-за помех GPS используйте ручную привязку",
-    en: "Due to GPS jamming, please pin manually",
-  },
-  antiEW: { ua: "Анти-РЕБ режим", ru: "Анти-РЭБ режим", en: "Anti-Jamming mode" },
-  address: { ua: "Адреса", ru: "Адрес", en: "Address" },
+  enterCode: { ua: "Введіть 6-значний код", ru: "Введите 6-значный код", en: "Enter 6-digit code" },
+  codeResend: { ua: "Надіслати знову через", ru: "Отправить снова через", en: "Resend in" },
+  verify: { ua: "Підтвердити", ru: "Подтвердить", en: "Verify" },
+  back: { ua: "Назад", ru: "Назад", en: "Back" },
+
+  // grandma
+  emergencyHelp: { ua: "ТЕРМІНОВА ДОПОМОГА", ru: "СРОЧНАЯ ПОМОЩЬ", en: "EMERGENCY HELP" },
+  emergencyHelpSub: { ua: "Залило, іскрить, прорив", ru: "Залило, искрит, прорыв", en: "Flood, sparks, burst" },
+  regularRepair: { ua: "ЗВИЧАЙНИЙ РЕМОНТ", ru: "ОБЫЧНЫЙ РЕМОНТ", en: "REGULAR REPAIR" },
+  regularRepairSub: { ua: "Двері, замки, дрібниці", ru: "Двери, замки, мелочи", en: "Doors, locks, small jobs" },
+  callOperator: { ua: "ПОЗВОНИТИ ОПЕРАТОРУ", ru: "ПОЗВОНИТЬ ОПЕРАТОРУ", en: "CALL OPERATOR" },
+  callOperatorSub: { ua: "Жива людина допоможе", ru: "Живой человек поможет", en: "A real person will help" },
+  voiceMessage: { ua: "Натисніть і розкажіть голосом", ru: "Нажмите и расскажите голосом", en: "Tap and speak the issue" },
+  voiceRecording: { ua: "Записуємо... говоріть", ru: "Записываем... говорите", en: "Recording... speak" },
+  voiceSaved: { ua: "Голосове повідомлення збережено ✓", ru: "Голосовое сообщение сохранено ✓", en: "Voice message saved ✓" },
+  moneySafe: { ua: "Гроші в безпеці у банку", ru: "Деньги в безопасности в банке", en: "Money safely guarded by bank" },
+  getHelp: { ua: "Допомога", ru: "Помощь", en: "Get help" },
+  allGood: { ua: "Все відмінно", ru: "Всё отлично", en: "Everything was good" },
+  hadProblems: { ua: "Були проблеми", ru: "Были проблемы", en: "Had problems" },
+
+  // master uncle tolya
+  lookingForWork: { ua: "ЧЕКАЮ ЗАМОВЛЕННЯ", ru: "ЖДУ ЗАКАЗЫ", en: "LOOKING FOR WORK" },
+  resting: { ua: "ВІДПОЧИВАЮ", ru: "ОТДЫХАЮ", en: "RESTING" },
+  todayIncoming: { ua: "Сьогодні прийшло", ru: "Сегодня поступило", en: "Today incoming" },
+  paymentGuaranteed: { ua: "Оплата перевірена та гарантована банком", ru: "Оплата проверена и гарантирована банком", en: "Payment verified & guaranteed by bank" },
+  myWorks: { ua: "Фото моїх робіт", ru: "Фото моих работ", en: "Photos of my works" },
+  addWorkPhoto: { ua: "Додати фото роботи", ru: "Добавить фото работы", en: "Add work photo" },
+  pickTrade: { ua: "Оберіть фах", ru: "Выберите ремесло", en: "Pick your trade" },
+  tradeWater: { ua: "Сантехніка", ru: "Сантехника", en: "Water / Plumbing" },
+  tradeElectric: { ua: "Електрика", ru: "Электрика", en: "Electricity" },
+  tradeHome: { ua: "Дрібний ремонт", ru: "Мелкий ремонт", en: "Home repair" },
+  tradeHeavy: { ua: "Важка робота", ru: "Тяжёлая работа", en: "Heavy labour" },
+
+  // map / anti-EW
+  mapTitle: { ua: "Карта виклику", ru: "Карта вызова", en: "Service map" },
+  searchAddress: { ua: "Введіть вулицю та номер", ru: "Введите улицу и номер", en: "Type street and number" },
+  antiEW: { ua: "СБІЙ GPS (АНТИ-РЕБ)", ru: "СБОЙ GPS (АНТИ-РЭБ)", en: "GPS INTERFERENCE (ANTI-EW)" },
+  antiEWOn: { ua: "Ручний режим активний — перетягніть пін", ru: "Ручной режим активен — перетащите пин", en: "Manual mode active — drag the pin" },
   confirmLocation: { ua: "Підтвердити локацію", ru: "Подтвердить локацию", en: "Confirm location" },
-  chat: { ua: "Чат", ru: "Чат", en: "Chat" },
+  gsmFallback: { ua: "Звичайний дзвінок (без інтернету)", ru: "Обычный звонок (без интернета)", en: "Call via Regular Network" },
+
+  // chat / escrow
+  chatTitle: { ua: "Чат з майстром", ru: "Чат с мастером", en: "Chat with master" },
   typeMessage: { ua: "Введіть повідомлення...", ru: "Введите сообщение...", en: "Type a message..." },
-  sendOffer: { ua: "Надіслати пропозицію", ru: "Отправить предложение", en: "Send price offer" },
+  attach: { ua: "Фото / відео", ru: "Фото / видео", en: "Photo / video" },
+  proposePrice: { ua: "Назвати ціну", ru: "Назвать цену", en: "Propose price" },
   priceOffer: { ua: "Цінова пропозиція", ru: "Ценовое предложение", en: "Price offer" },
-  acceptPay: { ua: "Прийняти і оплатити", ru: "Принять и оплатить", en: "Accept & Pay" },
-  escrowHold: { ua: "Гроші заморожені (Escrow)", ru: "Деньги заморожены (Hold)", en: "Funds frozen safely (Escrow)" },
-  escrowHint: {
-    ua: "Кошти будуть передані майстру після завершення.",
-    ru: "Средства будут переданы мастеру после завершения.",
-    en: "Funds will be released after completion.",
-  },
-  cashPay: { ua: "Готівка", ru: "Наличные", en: "Cash" },
-  cashConfirm: {
-    ua: "Підтвердіть, що сплачуєте готівкою (двічі).",
-    ru: "Подтвердите оплату наличными (дважды).",
-    en: "Confirm cash payment (double confirm).",
-  },
-  pending: { ua: "Очікування", ru: "Ожидание", en: "Pending" },
-  enroute: { ua: "В дорозі", ru: "В пути", en: "En route" },
-  inProgress: { ua: "Виконується", ru: "В работе", en: "In progress" },
-  completed: { ua: "Завершено", ru: "Завершено", en: "Completed" },
-  dispute: { ua: "Арбітраж", ru: "Арбитраж", en: "Dispute" },
-  openDispute: { ua: "Відкрити спір", ru: "Открыть спор", en: "Open dispute" },
-  releaseFunds: { ua: "Підтвердити та сплатити", ru: "Подтвердить и оплатить", en: "Release funds" },
-  profile: { ua: "Профіль", ru: "Профиль", en: "Profile" },
-  wallet: { ua: "Гаманець", ru: "Кошелёк", en: "Wallet" },
-  history: { ua: "Історія замовлень", ru: "История заказов", en: "Order history" },
-  rating: { ua: "Рейтинг", ru: "Рейтинг", en: "Rating" },
-  logout: { ua: "Вийти", ru: "Выйти", en: "Logout" },
-  home: { ua: "Головна", ru: "Главная", en: "Home" },
-  available: { ua: "доступних", ru: "доступных", en: "available" },
-  jobs: { ua: "робіт", ru: "работ", en: "jobs" },
-  km: { ua: "км", ru: "км", en: "km" },
-  send: { ua: "Надіслати", ru: "Отправить", en: "Send" },
+  acceptOffer: { ua: "Прийняти пропозицію", ru: "Принять предложение", en: "Accept offer" },
+  payGoogle: { ua: "Сплатити через Google Pay", ru: "Оплатить через Google Pay", en: "Pay with Google Pay" },
+  paySheetTitle: { ua: "Підтвердження оплати", ru: "Подтверждение оплаты", en: "Confirm payment" },
+  paySheetHint: { ua: "Картка **** 8841 · Google Pay", ru: "Карта **** 8841 · Google Pay", en: "Card **** 8841 · Google Pay" },
+  payConfirm: { ua: "Підтвердити", ru: "Подтвердить", en: "Confirm" },
+  fundsFrozen: { ua: "Кошти заморожені", ru: "Средства заморожены", en: "Funds Frozen" },
+  enroute: { ua: "Майстер їде", ru: "Мастер в пути", en: "Master en route" },
+  inProgress: { ua: "Робота йде", ru: "Работа идёт", en: "Work in progress" },
+  completed: { ua: "Виконано", ru: "Выполнен", en: "Completed" },
+  openDispute: { ua: "Поскаржитися", ru: "Пожаловаться", en: "Open dispute" },
+  jobMedia: { ua: "Фото поломки", ru: "Фото поломки", en: "Job media" },
+
+  // rating
+  ratingTitle: { ua: "Оцініть роботу", ru: "Оцените работу", en: "Rate the job" },
+  ratingMasterTitle: { ua: "Оцініть клієнта", ru: "Оцените клиента", en: "Rate the client" },
+  badgeFast: { ua: "Швидко", ru: "Быстро", en: "Fast" },
+  badgePolite: { ua: "Ввічливий", ru: "Вежливый", en: "Polite" },
+  badgeClean: { ua: "Чисто", ru: "Чистота", en: "Clean" },
+  badgeFair: { ua: "Чесна ціна", ru: "Честная цена", en: "Fair price" },
+  badgeGoodClient: { ua: "Хороший замовник", ru: "Хороший заказчик", en: "Good client" },
+  badgePaidFast: { ua: "Одразу сплатив", ru: "Сразу оплатил", en: "Paid instantly" },
+  badgeAdequate: { ua: "Адекватний", ru: "Адекватный", en: "Adequate" },
+  leaveReview: { ua: "Залишити відгук", ru: "Оставить отзыв", en: "Leave review" },
+
+  // support
+  support: { ua: "Підтримка", ru: "Поддержка", en: "Support" },
+  supportChat: { ua: "Чат підтримки", ru: "Чат поддержки", en: "Support chat" },
+  telegram: { ua: "Telegram-бот", ru: "Telegram-бот", en: "Telegram bot" },
+  viber: { ua: "Viber-канал", ru: "Viber-канал", en: "Viber channel" },
+  hotline: { ua: "Гаряча лінія", ru: "Горячая линия", en: "Phone hotline" },
+  legalDocs: { ua: "Договір та застереження", ru: "Договор и оговорки", en: "User Agreement & Waivers" },
+
+  // admin
+  adminTitle: { ua: "Адмін-панель", ru: "Админ-панель", en: "Admin panel" },
+  liveJobs: { ua: "Активні замовлення", ru: "Активные заказы", en: "Live jobs" },
+  operatorsOnline: { ua: "Майстри онлайн", ru: "Мастера онлайн", en: "Verified operators online" },
+  cashVolume: { ua: "Обіг готівки сьогодні", ru: "Оборот наличных сегодня", en: "Active cash volumes" },
+  registrationQueue: { ua: "Черга реєстрації майстрів", ru: "Очередь регистрации мастеров", en: "Master registration queue" },
+  approve: { ua: "Підтвердити", ru: "Подтвердить", en: "Approve" },
+  reject: { ua: "Відхилити", ru: "Отклонить", en: "Reject" },
+  disputeDesk: { ua: "Арбітражний стіл", ru: "Арбитражный стол", en: "Live arbitrage desk" },
+  releaseToMaster: { ua: "Видати майстру", ru: "Выдать мастеру", en: "Release to master" },
+  refundClient: { ua: "Повернути клієнту", ru: "Вернуть клиенту", en: "Refund client" },
+  openCase: { ua: "Відкрити справу", ru: "Открыть дело", en: "Open case" },
+  pciNotice: { ua: "PCI-DSS · картки токенізуються Stripe / WayForPay", ru: "PCI-DSS · карты токенизируются Stripe / WayForPay", en: "PCI-DSS — cards tokenised via Stripe / WayForPay" },
+
+  // misc
+  cancel: { ua: "Скасувати", ru: "Отмена", en: "Cancel" },
   close: { ua: "Закрити", ru: "Закрыть", en: "Close" },
-  startChat: { ua: "Відкрити чат", ru: "Открыть чат", en: "Open chat" },
-  switchRole: { ua: "Роль", ru: "Роль", en: "Role" },
-  noPhotoYet: { ua: "Фото не додано", ru: "Фото не добавлено", en: "No photo yet" },
-  emergencyIncoming: { ua: "ТЕРМІНОВО!", ru: "СРОЧНО!", en: "URGENT!" },
-  detectingMasters: {
-    ua: "Виявлено майстрів поруч",
-    ru: "Обнаружены мастера рядом",
-    en: "Masters detected nearby",
-  },
+  send: { ua: "Надіслати", ru: "Отправить", en: "Send" },
+  save: { ua: "Зберегти", ru: "Сохранить", en: "Save" },
+  status: { ua: "Статус", ru: "Статус", en: "Status" },
 };
 
 export const CATEGORIES = [
   { id: "electric", ua: "Електрик", ru: "Электрик", en: "Electrician", icon: "⚡" },
   { id: "plumb", ua: "Сантехнік", ru: "Сантехник", en: "Plumber", icon: "🚿" },
-  { id: "lock", ua: "Сюди слюсар", ru: "Слесарь", en: "Locksmith", icon: "🔑" },
+  { id: "lock", ua: "Слюсар", ru: "Слесарь", en: "Locksmith", icon: "🔑" },
   { id: "appliance", ua: "Ремонт техніки", ru: "Ремонт техники", en: "Appliance Repair", icon: "🔧" },
-  { id: "carpenter", ua: "Тесля", ru: "Плотник", en: "Carpenter", icon: "🪚" },
-  { id: "clean", ua: "Прибирання", ru: "Уборка", en: "Cleaning", icon: "🧽" },
-  { id: "ac", ua: "Кондиціонери", ru: "Кондиционеры", en: "AC Repair", icon: "❄️" },
-  { id: "windows", ua: "Вікна", ru: "Окна", en: "Windows", icon: "🪟" },
 ];
 
 export function tr(key: keyof typeof t_dict, lang: Lang): string {
   return t_dict[key]?.[lang] ?? String(key);
-}
-
-export function catName(id: string, lang: Lang): string {
-  const c = CATEGORIES.find((x) => x.id === id);
-  return c ? c[lang] : id;
 }
