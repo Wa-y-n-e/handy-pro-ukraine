@@ -1,339 +1,300 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import type { Lang } from "./i18n";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { Lang, ViewMode } from "./i18n";
 
 export type Role = "client" | "master";
-export type Availability = "online" | "busy" | "offline";
-export type OrderStatus = "pending" | "enroute" | "in_progress" | "completed" | "dispute";
-export type PaymentMethod = "escrow" | "cash";
+export type OrderStatus = "pending" | "frozen" | "enroute" | "in_progress" | "completed" | "dispute";
 
-export interface MasterProfile {
-  id: string;
-  name: string;
-  photo?: string;
-  rating: number;
-  jobs: number;
-  categories: string[];
-  distanceKm: number;
-  availability: Availability;
-}
-
-export interface ChatMessage {
+export interface ChatMsg {
   id: string;
   from: "client" | "master" | "system";
   text?: string;
   offerPrice?: number;
+  media?: string; // emoji/image url placeholder
   at: number;
 }
 
 export interface Order {
   id: string;
-  masterId: string;
   status: OrderStatus;
   price?: number;
-  payment?: PaymentMethod;
-  escrowHeld?: boolean;
-  category?: string;
+  address: string;
+  category: string;
   createdAt: number;
 }
 
-export interface User {
-  role: Role;
+export interface MasterApplication {
+  id: string;
   name: string;
-  email: string;
-  phone?: string;
-  photo?: string;
-  categories?: string[];
-  wallet: number;
-  rating: number;
-  completed: number;
+  trade: string;
+  idPhoto: string;
+  selfie: string;
 }
 
-interface SosState {
-  active: boolean;
-  acceptedBy?: string;
-  startedAt?: number;
+export interface DisputeCase {
+  id: string;
+  client: string;
+  master: string;
+  amount: number;
+  reason: string;
+  transcript: { from: string; text: string }[];
+  photos: string[];
 }
 
 interface AppState {
   lang: Lang;
   setLang: (l: Lang) => void;
-  role: Role;
-  setRole: (r: Role) => void;
-  user: User;
-  setUser: (u: Partial<User>) => void;
+
+  viewMode: ViewMode;
+  setViewMode: (v: ViewMode) => void;
+
+  // auth
   authed: boolean;
-  signIn: (u: Partial<User> & { role: Role; name: string; email: string }) => void;
+  phone: string;
+  setPhone: (p: string) => void;
+  legalAccepted: boolean;
+  setLegalAccepted: (b: boolean) => void;
+  otpSent: boolean;
+  sendOtp: () => void;
+  verifyOtp: (code: string) => boolean;
   signOut: () => void;
 
-  availability: Availability;
-  setAvailability: (a: Availability) => void;
+  // master availability (uncle tolya)
+  masterActive: boolean;
+  setMasterActive: (b: boolean) => void;
+  masterTrades: string[];
+  toggleTrade: (t: string) => void;
+  masterPortfolio: string[];
+  addPortfolioPhoto: (src: string) => void;
 
-  masters: MasterProfile[];
-  filteredMasters: (q?: string) => MasterProfile[];
-
-  sos: SosState;
-  triggerSos: () => void;
-  cancelSos: () => void;
-  acceptSos: (masterId: string) => void;
-
-  // chat / order
-  order: Order | null;
-  messages: ChatMessage[];
-  sendMessage: (text: string) => void;
+  // order / chat
+  order: Order;
+  messages: ChatMsg[];
+  sendMessage: (text: string, media?: string) => void;
   sendOffer: (price: number) => void;
-  acceptOffer: (payment: PaymentMethod) => void;
+  acceptOffer: () => void;
   advanceOrder: () => void;
   openDispute: () => void;
-  releaseEscrow: () => void;
+  setOrderStatus: (s: OrderStatus) => void;
 
-  // location
+  // anti-EW map
+  antiEW: boolean;
+  setAntiEW: (b: boolean) => void;
   pinAddress: string;
   setPinAddress: (a: string) => void;
-  pinCoord: { x: number; y: number };
-  setPinCoord: (p: { x: number; y: number }) => void;
+  pinXY: { x: number; y: number };
+  setPinXY: (p: { x: number; y: number }) => void;
 
-  // incoming emergency banner for master
-  incomingEmergency: { id: string; address: string; category: string } | null;
-  dismissEmergency: () => void;
+  // offline gsm fallback
+  offline: boolean;
+  setOffline: (b: boolean) => void;
+
+  // support hub
+  supportOpen: boolean;
+  setSupportOpen: (b: boolean) => void;
+  legalOpen: boolean;
+  setLegalOpen: (b: boolean) => void;
+
+  // rating modal
+  ratingOpen: boolean;
+  setRatingOpen: (b: boolean) => void;
+
+  // pay sheet
+  paySheetOpen: boolean;
+  setPaySheetOpen: (b: boolean) => void;
+
+  // admin data
+  liveJobsCount: number;
+  operatorsOnline: number;
+  cashVolume: number;
+  registrationQueue: MasterApplication[];
+  approveMaster: (id: string) => void;
+  rejectMaster: (id: string) => void;
+  disputes: DisputeCase[];
+  resolveDispute: (id: string, to: "master" | "client") => void;
 }
 
 const Ctx = createContext<AppState | null>(null);
 
-const MOCK_MASTERS: MasterProfile[] = [
-  { id: "m1", name: "Олег К.", rating: 4.9, jobs: 312, categories: ["electric", "appliance"], distanceKm: 1.2, availability: "online" },
-  { id: "m2", name: "Андрій М.", rating: 4.8, jobs: 198, categories: ["plumb"], distanceKm: 2.4, availability: "online" },
-  { id: "m3", name: "Ірина С.", rating: 5.0, jobs: 87, categories: ["clean"], distanceKm: 0.8, availability: "busy" },
-  { id: "m4", name: "Віктор П.", rating: 4.7, jobs: 421, categories: ["lock", "carpenter"], distanceKm: 3.1, availability: "online" },
-  { id: "m5", name: "Сергій Д.", rating: 4.6, jobs: 156, categories: ["ac", "appliance"], distanceKm: 4.5, availability: "offline" },
-  { id: "m6", name: "Микола Г.", rating: 4.9, jobs: 263, categories: ["electric", "lock"], distanceKm: 1.9, availability: "online" },
+const SEED_QUEUE: MasterApplication[] = [
+  { id: "a1", name: "Анатолій П.", trade: "Електрика", idPhoto: "🪪", selfie: "👨‍🔧" },
+  { id: "a2", name: "Володимир С.", trade: "Сантехніка", idPhoto: "🪪", selfie: "🧔" },
+  { id: "a3", name: "Микола Д.", trade: "Дрібний ремонт", idPhoto: "🪪", selfie: "👴" },
+];
+
+const SEED_DISPUTES: DisputeCase[] = [
+  {
+    id: "d1",
+    client: "Ірина К. (+380 ******27)",
+    master: "Олег Т. (+380 ******11)",
+    amount: 1800,
+    reason: "Робота виконана неякісно",
+    transcript: [
+      { from: "client", text: "Здравствуйте, протекает кран" },
+      { from: "master", text: "Виїжджаю, буду за 20 хв" },
+      { from: "master", text: "Готово, перевіряйте" },
+      { from: "client", text: "Снова течет через час!" },
+    ],
+    photos: ["🚿", "💧", "🔧"],
+  },
+  {
+    id: "d2",
+    client: "Сергій Б. (+380 ******94)",
+    master: "Андрій Л. (+380 ******02)",
+    amount: 950,
+    reason: "Клієнт не приймає роботу",
+    transcript: [
+      { from: "client", text: "Замок не вертится" },
+      { from: "master", text: "Замінив особисто, працює" },
+      { from: "client", text: "Не нравится цвет ручки" },
+    ],
+    photos: ["🔑", "🚪"],
+  },
 ];
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>("ru");
-  const [role, setRole] = useState<Role>("client");
+  const [viewMode, setViewMode] = useState<ViewMode>("client");
+
   const [authed, setAuthed] = useState(false);
-  const [user, setUserState] = useState<User>({
-    role: "client",
-    name: "Гість",
-    email: "",
-    wallet: 1450,
-    rating: 4.8,
-    completed: 12,
+  const [phone, setPhone] = useState("");
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+
+  const [masterActive, setMasterActive] = useState(true);
+  const [masterTrades, setMasterTrades] = useState<string[]>(["tradeElectric", "tradeHome"]);
+  const [masterPortfolio, setMasterPortfolio] = useState<string[]>([]);
+
+  const [order, setOrder] = useState<Order>({
+    id: "o1",
+    status: "pending",
+    address: "вул. Сумська, 25, Харків",
+    category: "electric",
+    createdAt: Date.now(),
   });
-  const [availability, setAvailability] = useState<Availability>("online");
-  const [masters, setMasters] = useState<MasterProfile[]>(MOCK_MASTERS);
-  const [sos, setSos] = useState<SosState>({ active: false });
-  const [order, setOrder] = useState<Order | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: "s1", from: "system", text: "Чат створено · Чат создан · Chat started", at: Date.now() - 60000 },
-    { id: "m1", from: "master", text: "Добрий день! Готовий виїхати. У чому проблема?", at: Date.now() - 50000 },
+  const [messages, setMessages] = useState<ChatMsg[]>([
+    { id: "s1", from: "system", text: "Чат створено · Chat started", at: Date.now() - 90000 },
+    { id: "c1", from: "client", text: "Здравствуйте! Не работает розетка на кухне.", at: Date.now() - 60000 },
+    { id: "m1", from: "master", text: "Доброго дня! Виїжджаю, буду за 25 хв.", at: Date.now() - 40000 },
   ]);
+
+  const [antiEW, setAntiEW] = useState(false);
   const [pinAddress, setPinAddress] = useState("вул. Сумська, 25, Харків");
-  const [pinCoord, setPinCoord] = useState({ x: 50, y: 50 });
-  const [incomingEmergency, setIncomingEmergency] = useState<AppState["incomingEmergency"]>(null);
+  const [pinXY, setPinXY] = useState({ x: 50, y: 50 });
 
-  const setUser = useCallback((u: Partial<User>) => {
-    setUserState((prev) => ({ ...prev, ...u }));
+  const [offline, setOffline] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(false);
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const [paySheetOpen, setPaySheetOpen] = useState(false);
+
+  const [registrationQueue, setRegistrationQueue] = useState<MasterApplication[]>(SEED_QUEUE);
+  const [disputes, setDisputes] = useState<DisputeCase[]>(SEED_DISPUTES);
+
+  const sendOtp = useCallback(() => setOtpSent(true), []);
+  const verifyOtp = useCallback((code: string) => {
+    if (code.length === 6) {
+      setAuthed(true);
+      return true;
+    }
+    return false;
   }, []);
-
-  const signIn = useCallback((u: Partial<User> & { role: Role; name: string; email: string }) => {
-    setUserState((prev) => ({ ...prev, ...u }));
-    setRole(u.role);
-    setAuthed(true);
-  }, []);
-
   const signOut = useCallback(() => {
     setAuthed(false);
+    setOtpSent(false);
+    setPhone("");
+    setLegalAccepted(false);
   }, []);
 
-  // Keep user.role in sync with active role toggle (testing convenience)
-  useEffect(() => {
-    setUserState((prev) => ({ ...prev, role }));
-  }, [role]);
-
-  const filteredMasters = useCallback(
-    (q?: string) => {
-      const visible = masters.filter((m) => m.availability === "online");
-      if (!q) return visible;
-      const s = q.toLowerCase();
-      return visible.filter(
-        (m) => m.name.toLowerCase().includes(s) || m.categories.some((c) => c.includes(s)),
-      );
-    },
-    [masters],
-  );
-
-  const triggerSos = useCallback(() => {
-    setSos({ active: true, startedAt: Date.now() });
-    // simulate broadcast to master side
-    setIncomingEmergency({
-      id: "sos-" + Date.now(),
-      address: pinAddress,
-      category: "electric",
-    });
-  }, [pinAddress]);
-
-  const cancelSos = useCallback(() => {
-    setSos({ active: false });
-    setIncomingEmergency(null);
+  const toggleTrade = useCallback((t: string) => {
+    setMasterTrades((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
   }, []);
 
-  const acceptSos = useCallback((masterId: string) => {
-    setSos((s) => ({ ...s, acceptedBy: masterId }));
-    setIncomingEmergency(null);
-    setOrder({
-      id: "o-" + Date.now(),
-      masterId,
-      status: "enroute",
-      category: "electric",
-      createdAt: Date.now(),
-    });
+  const addPortfolioPhoto = useCallback((src: string) => {
+    setMasterPortfolio((p) => [src, ...p].slice(0, 12));
   }, []);
 
-  const dismissEmergency = useCallback(() => setIncomingEmergency(null), []);
-
-  const sendMessage = useCallback((text: string) => {
-    setMessages((m) => [
-      ...m,
-      { id: "msg-" + Date.now(), from: role, text, at: Date.now() },
-    ]);
-    // auto-reply from the other side
+  const sendMessage = useCallback((text: string, media?: string) => {
+    if (!text.trim() && !media) return;
+    const from: ChatMsg["from"] = viewMode === "master" ? "master" : "client";
+    setMessages((m) => [...m, { id: "msg" + Date.now(), from, text: text || undefined, media, at: Date.now() }]);
     setTimeout(() => {
       setMessages((m) => [
         ...m,
         {
-          id: "msg-" + Date.now(),
-          from: role === "client" ? "master" : "client",
-          text: role === "client" ? "Прийняв, виїжджаю." : "Дякую, чекаю!",
+          id: "msg" + Date.now() + "r",
+          from: from === "client" ? "master" : "client",
+          text: from === "client" ? "Прийняв, скоро буду" : "Дякую, чекаю",
           at: Date.now(),
         },
       ]);
-    }, 900);
-  }, [role]);
+    }, 800);
+  }, [viewMode]);
 
   const sendOffer = useCallback((price: number) => {
-    setMessages((m) => [
-      ...m,
-      { id: "off-" + Date.now(), from: "master", offerPrice: price, at: Date.now() },
-    ]);
-    setOrder((o) =>
-      o ?? {
-        id: "o-" + Date.now(),
-        masterId: "m1",
-        status: "pending",
-        price,
-        createdAt: Date.now(),
-      },
-    );
+    setMessages((m) => [...m, { id: "off" + Date.now(), from: "master", offerPrice: price, at: Date.now() }]);
+    setOrder((o) => ({ ...o, price }));
   }, []);
 
-  const acceptOffer = useCallback((payment: PaymentMethod) => {
-    setOrder((o) => {
-      const base: Order = o ?? {
-        id: "o-" + Date.now(),
-        masterId: "m1",
-        status: "pending",
-        createdAt: Date.now(),
-      };
-      return { ...base, payment, escrowHeld: payment === "escrow", status: "enroute" };
-    });
-    setMessages((m) => [
-      ...m,
-      {
-        id: "sys-" + Date.now(),
-        from: "system",
-        text:
-          payment === "escrow"
-            ? "💳 Кошти заморожені у безпечному Escrow"
-            : "💵 Готівковий розрахунок підтверджено",
-        at: Date.now(),
-      },
-    ]);
+  const acceptOffer = useCallback(() => {
+    setPaySheetOpen(true);
   }, []);
 
   const advanceOrder = useCallback(() => {
     setOrder((o) => {
-      if (!o) return o;
-      const flow: OrderStatus[] = ["pending", "enroute", "in_progress", "completed"];
-      const idx = flow.indexOf(o.status);
-      if (idx < 0 || idx >= flow.length - 1) return o;
-      return { ...o, status: flow[idx + 1] };
+      const flow: OrderStatus[] = ["pending", "frozen", "enroute", "in_progress", "completed"];
+      const i = flow.indexOf(o.status);
+      if (i < 0 || i >= flow.length - 1) return o;
+      const next = flow[i + 1];
+      if (next === "completed") setTimeout(() => setRatingOpen(true), 400);
+      return { ...o, status: next };
     });
   }, []);
 
   const openDispute = useCallback(() => {
-    setOrder((o) => (o ? { ...o, status: "dispute", escrowHeld: true } : o));
+    setOrder((o) => ({ ...o, status: "dispute" }));
     setMessages((m) => [
       ...m,
-      { id: "sys-" + Date.now(), from: "system", text: "⚠️ Відкрито спір — модератор підключиться", at: Date.now() },
+      { id: "sys" + Date.now(), from: "system", text: "⚠️ Відкрито спір — модератор підключиться", at: Date.now() },
     ]);
   }, []);
 
-  const releaseEscrow = useCallback(() => {
-    setOrder((o) => (o ? { ...o, escrowHeld: false, status: "completed" } : o));
-    setMessages((m) => [
-      ...m,
-      { id: "sys-" + Date.now(), from: "system", text: "✅ Кошти передані майстру. Дякуємо!", at: Date.now() },
-    ]);
-    setUserState((u) => ({ ...u, completed: u.completed + 1 }));
+  const setOrderStatus = useCallback((s: OrderStatus) => setOrder((o) => ({ ...o, status: s })), []);
+
+  const approveMaster = useCallback((id: string) => setRegistrationQueue((q) => q.filter((x) => x.id !== id)), []);
+  const rejectMaster = useCallback((id: string) => setRegistrationQueue((q) => q.filter((x) => x.id !== id)), []);
+  const resolveDispute = useCallback((id: string, _to: "master" | "client") => {
+    setDisputes((d) => d.filter((x) => x.id !== id));
   }, []);
 
-  // master availability affects search visibility
+  // simulate offline ping
   useEffect(() => {
-    if (role === "master") {
-      setMasters((ms) =>
-        ms.map((m, i) => (i === 0 ? { ...m, availability } : m)),
-      );
-    }
-  }, [availability, role]);
+    if (!authed) return;
+    const t = window.setTimeout(() => setOffline(false), 100);
+    return () => window.clearTimeout(t);
+  }, [authed]);
 
   const value: AppState = useMemo(
     () => ({
-      lang,
-      setLang,
-      role,
-      setRole,
-      user,
-      setUser,
-      authed,
-      signIn,
-      signOut,
-      availability,
-      setAvailability,
-      masters,
-      filteredMasters,
-      sos,
-      triggerSos,
-      cancelSos,
-      acceptSos,
-      order,
-      messages,
-      sendMessage,
-      sendOffer,
-      acceptOffer,
-      advanceOrder,
-      openDispute,
-      releaseEscrow,
-      pinAddress,
-      setPinAddress,
-      pinCoord,
-      setPinCoord,
-      incomingEmergency,
-      dismissEmergency,
+      lang, setLang, viewMode, setViewMode,
+      authed, phone, setPhone, legalAccepted, setLegalAccepted, otpSent, sendOtp, verifyOtp, signOut,
+      masterActive, setMasterActive, masterTrades, toggleTrade, masterPortfolio, addPortfolioPhoto,
+      order, messages, sendMessage, sendOffer, acceptOffer, advanceOrder, openDispute, setOrderStatus,
+      antiEW, setAntiEW, pinAddress, setPinAddress, pinXY, setPinXY,
+      offline, setOffline,
+      supportOpen, setSupportOpen, legalOpen, setLegalOpen, ratingOpen, setRatingOpen, paySheetOpen, setPaySheetOpen,
+      liveJobsCount: 42, operatorsOnline: 138, cashVolume: 184500,
+      registrationQueue, approveMaster, rejectMaster,
+      disputes, resolveDispute,
     }),
     [
-      lang, role, user, authed, availability, masters, filteredMasters,
-      sos, order, messages, pinAddress, pinCoord, incomingEmergency,
-      setUser, signIn, signOut, triggerSos, cancelSos, acceptSos,
-      sendMessage, sendOffer, acceptOffer, advanceOrder, openDispute, releaseEscrow, dismissEmergency,
+      lang, viewMode, authed, phone, legalAccepted, otpSent,
+      masterActive, masterTrades, masterPortfolio,
+      order, messages, antiEW, pinAddress, pinXY,
+      offline, supportOpen, legalOpen, ratingOpen, paySheetOpen,
+      registrationQueue, disputes,
+      sendOtp, verifyOtp, signOut, toggleTrade, addPortfolioPhoto,
+      sendMessage, sendOffer, acceptOffer, advanceOrder, openDispute, setOrderStatus,
+      approveMaster, rejectMaster, resolveDispute,
     ],
   );
 
