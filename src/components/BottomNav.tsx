@@ -2,13 +2,13 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Home, Map, Package, MessageCircle, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const tabs = [
+const tabs: Array<{ to: string; label: string; icon: typeof Home; exact?: boolean }> = [
   { to: "/", label: "Головна", icon: Home, exact: true },
   { to: "/map", label: "Карта", icon: Map },
   { to: "/orders", label: "Замовлення", icon: Package },
   { to: "/chats", label: "Чати", icon: MessageCircle },
   { to: "/profile", label: "Профіль", icon: User },
-] as const;
+];
 
 export function BottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
