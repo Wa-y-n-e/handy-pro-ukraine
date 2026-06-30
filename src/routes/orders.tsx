@@ -48,24 +48,22 @@ function OrdersPage() {
   const instantWithdraw = async () => {
     if (!profile || balance <= 0) return;
     setBusy(true);
-    const fee = balance * INSTANT_PAYOUT_FEE;
-    const payout = balance - fee;
-    await supabase.from("transactions").insert([
-      { master_id: profile.id, kind: "instant_fee", amount: -fee },
-      { master_id: profile.id, kind: "payout", amount: -payout },
-    ]);
-    await supabase.from("profiles").update({ wallet_balance: 0 }).eq("id", profile.id);
-    toast.success(`Виведено ${payout.toFixed(2)} ₴ (комісія ${fee.toFixed(2)} ₴)`);
+    const { data, error } = await supabase.rpc("wallet_instant_withdraw");
+    if (error) {
+      toast.error(error.message);
+    } else {
+      const row = Array.isArray(data) ? data[0] : data;
+      toast.success(`Виведено ${Number(row?.payout ?? 0).toFixed(2)} ₴ (комісія ${Number(row?.fee ?? 0).toFixed(2)} ₴)`);
+    }
     setBusy(false);
   };
 
   const topUp = async (amount: number) => {
     if (!profile) return;
     setBusy(true);
-    const newBalance = Number(balance) + amount;
-    await supabase.from("transactions").insert({ master_id: profile.id, kind: "topup", amount });
-    await supabase.from("profiles").update({ wallet_balance: newBalance, status: newBalance >= 0 ? "free" : "offline" }).eq("id", profile.id);
-    toast.success(`Поповнено на ${amount} ₴`);
+    const { error } = await supabase.rpc("wallet_topup", { p_amount: amount });
+    if (error) toast.error(error.message);
+    else toast.success(`Поповнено на ${amount} ₴`);
     setBusy(false);
   };
 

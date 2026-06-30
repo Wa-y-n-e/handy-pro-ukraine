@@ -55,10 +55,11 @@ export function useSession() {
     }
     let mounted = true;
     (async () => {
-      const [{ data: p }, { data: r }] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+      const [{ data: pRows }, { data: r }] = await Promise.all([
+        supabase.rpc("get_my_profile"),
         supabase.from("user_roles").select("role").eq("user_id", user.id).limit(1).maybeSingle(),
       ]);
+      const p = Array.isArray(pRows) ? pRows[0] : null;
       if (!mounted) return;
       setProfile(p as Profile | null);
       setRole((r?.role as Role | null) ?? "client");

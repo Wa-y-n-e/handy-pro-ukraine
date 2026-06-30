@@ -528,6 +528,33 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_my_profile: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          created_at: string | null
+          experience_years: number | null
+          full_name: string | null
+          has_vehicle: boolean | null
+          id: string
+          locked_address: string | null
+          locked_lat: number | null
+          locked_lng: number | null
+          phone: string | null
+          primary_category_slug: string | null
+          rating: number | null
+          status: Database["public"]["Enums"]["master_status"] | null
+          tools_inventory: string | null
+          verified: boolean | null
+          wallet_balance: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -535,6 +562,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      pay_escrow_hold: {
+        Args: { p_amount: number; p_chat_id: string }
+        Returns: string
+      }
+      wallet_instant_withdraw: {
+        Args: never
+        Returns: {
+          fee: number
+          payout: number
+        }[]
+      }
+      wallet_topup: { Args: { p_amount: number }; Returns: number }
     }
     Enums: {
       app_role: "admin" | "master" | "client"

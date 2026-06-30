@@ -31,14 +31,17 @@ function ProfilePage() {
   useEffect(() => {
     if (!id) return;
     (async () => {
+      const profileQuery = isSelf
+        ? supabase.rpc("get_my_profile").then((res) => ({ data: Array.isArray(res.data) ? res.data[0] : null }))
+        : supabase.from("profiles").select("id, full_name, avatar_url, rating, status, verified, has_vehicle, tools_inventory, experience_years, primary_category_slug, locked_lat, locked_lng, created_at").eq("id", id).single();
       const [{ data: p }, { data: r }, { data: ph }, { data: rl }] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", id).single(),
+        profileQuery,
         supabase.from("reviews").select("id, rating, text, created_at, author:profiles!reviews_author_id_fkey(full_name)")
           .eq("target_id", id).order("created_at", { ascending: false }).limit(20),
         supabase.from("portfolio_photos").select("id, url").eq("master_id", id).order("position"),
         supabase.from("user_roles").select("role").eq("user_id", id).limit(1).maybeSingle(),
       ]);
-      setTarget(p as Profile);
+      setTarget(p as unknown as Profile);
       setReviews((r as unknown as Review[]) ?? []);
       setPhotos((ph as Photo[]) ?? []);
       setTargetRole(rl?.role ?? null);
