@@ -605,29 +605,47 @@ export type Database = {
       profiles_public: {
         Row: {
           avatar_url: string | null
+          created_at: string | null
+          experience_years: number | null
           full_name: string | null
+          has_vehicle: boolean | null
           id: string | null
+          locked_lat: number | null
+          locked_lng: number | null
           primary_category_slug: string | null
           rating: number | null
           status: Database["public"]["Enums"]["master_status"] | null
+          tools_inventory: string | null
           verified: boolean | null
         }
         Insert: {
           avatar_url?: string | null
+          created_at?: string | null
+          experience_years?: number | null
           full_name?: string | null
+          has_vehicle?: boolean | null
           id?: string | null
+          locked_lat?: never
+          locked_lng?: never
           primary_category_slug?: string | null
           rating?: number | null
           status?: Database["public"]["Enums"]["master_status"] | null
+          tools_inventory?: string | null
           verified?: boolean | null
         }
         Update: {
           avatar_url?: string | null
+          created_at?: string | null
+          experience_years?: number | null
           full_name?: string | null
+          has_vehicle?: boolean | null
           id?: string | null
+          locked_lat?: never
+          locked_lng?: never
           primary_category_slug?: string | null
           rating?: number | null
           status?: Database["public"]["Enums"]["master_status"] | null
+          tools_inventory?: string | null
           verified?: boolean | null
         }
         Relationships: []
