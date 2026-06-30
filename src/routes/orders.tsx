@@ -58,7 +58,7 @@ function OrdersPage() {
           .or(`client_id.eq.${profile.id},master_id.eq.${profile.id}`)
           .order("created_at", { ascending: false }),
         supabase
-          .from("reviews" as never)
+          .from("reviews")
           .select("order_id")
           .eq("author_id", profile.id)
           .not("order_id", "is", null),
@@ -66,9 +66,9 @@ function OrdersPage() {
       setOrders((data as Order[]) ?? []);
       setReviewedOrderIds(
         new Set(
-          ((reviewRows as unknown as Array<{ order_id: string }> | null) ?? []).map(
-            (row) => row.order_id,
-          ),
+          (reviewRows ?? [])
+            .map((row) => row.order_id)
+            .filter((orderId): orderId is string => orderId !== null),
         ),
       );
       setLoading(false);
@@ -260,8 +260,8 @@ function OrderCard({
     setBusy(true);
     const { error } =
       action === "start"
-        ? await supabase.rpc("start_order" as never, { p_order_id: o.id } as never)
-        : await supabase.rpc("complete_order" as never, { p_order_id: o.id } as never);
+        ? await supabase.rpc("start_order", { p_order_id: o.id })
+        : await supabase.rpc("complete_order", { p_order_id: o.id });
     if (error) toast.error(error.message);
     else {
       toast.success(action === "start" ? "Роботу розпочато" : "Замовлення завершено");
@@ -273,12 +273,12 @@ function OrderCard({
   const submitReview = async () => {
     setBusy(true);
     const { error } = await supabase.rpc(
-      "leave_order_review" as never,
+      "leave_order_review",
       {
         p_order_id: o.id,
         p_rating: reviewRating,
         p_text: reviewText,
-      } as never,
+      },
     );
     if (error) toast.error(error.message);
     else {

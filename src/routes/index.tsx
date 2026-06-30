@@ -71,12 +71,12 @@ function HomePage() {
     const duration = Math.max(1, Math.round((Date.now() - recordingStartedAt.current) / 1000));
     recordingStartedAt.current = null;
     setRecording(false);
-    const { error } = await supabase.from("support_requests" as never).insert({
+    const { error } = await supabase.from("support_requests").insert({
       created_by: user.id,
       kind: "voice",
       duration_seconds: duration,
       note: "Заявка зі спрощеного режиму",
-    } as never);
+    });
     if (error) toast.error("Не вдалося надіслати заявку");
     else toast.success("Заявку надіслано оператору");
   };

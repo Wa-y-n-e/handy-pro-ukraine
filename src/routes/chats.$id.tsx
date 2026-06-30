@@ -84,16 +84,15 @@ function ChatRoom() {
       if (c) {
         const otherId = profile.id === c.client_id ? c.master_id : c.client_id;
         const { data: publicRows } = await supabase.rpc(
-          "get_public_profile" as never,
-          { p_profile_id: otherId } as never,
+          "get_public_profile",
+          { p_profile_id: otherId },
         );
-        const publicProfile =
-          (publicRows as unknown as Array<Record<string, unknown>> | null)?.[0] ?? null;
+        const publicProfile = publicRows?.[0] ?? null;
         if (publicProfile) {
           setOther({
-            id: String(publicProfile.id),
-            full_name: publicProfile.full_name as string | null,
-            avatar_url: publicProfile.avatar_url as string | null,
+            id: publicProfile.id,
+            full_name: publicProfile.full_name,
+            avatar_url: publicProfile.avatar_url,
             rating: Number(publicProfile.rating ?? 5),
             role: String(publicProfile.role ?? "client"),
           });
@@ -106,7 +105,7 @@ function ChatRoom() {
         .order("created_at");
       setMessages((m as Msg[]) ?? []);
       setLoading(false);
-      await supabase.rpc("mark_chat_read" as never, { p_chat_id: id } as never);
+      await supabase.rpc("mark_chat_read", { p_chat_id: id });
     })();
     const ch = supabase
       .channel(`chat-${id}-${Math.random().toString(36).slice(2)}`)
@@ -252,11 +251,11 @@ function ChatRoom() {
   const acceptCashCard = async (message: Msg) => {
     if (!message.price) return;
     const { error } = await supabase.rpc(
-      "accept_cash_offer" as never,
+      "accept_cash_offer",
       {
         p_chat_id: id,
         p_amount: message.price,
-      } as never,
+      },
     );
     if (error) toast.error(error.message);
     else toast.success("Готівкове замовлення підтверджено");
@@ -373,11 +372,11 @@ function ChatRoom() {
 
   const resolveDispute = async (resolution: "refund_client" | "release_master") => {
     const { error } = await supabase.rpc(
-      "resolve_dispute" as never,
+      "resolve_dispute",
       {
         p_chat_id: id,
         p_resolution: resolution,
-      } as never,
+      },
     );
     if (error) toast.error(error.message);
     else toast.success("Рішення арбітражу збережено");
