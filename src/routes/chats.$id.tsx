@@ -49,7 +49,7 @@ function ChatRoom() {
       setChat(c as Chat);
       if (c) {
         const otherId = profile.id === c.client_id ? c.master_id : c.client_id;
-        const { data: o } = await supabase.from("profiles").select("full_name, avatar_url, rating").eq("id", otherId).single();
+        const { data: o } = await supabase.from("profiles_public" as never).select("full_name, avatar_url, rating").eq("id", otherId).single();
         setOther(o as any);
       }
       const { data: m } = await supabase.from("messages").select("*").eq("chat_id", id).order("created_at");
