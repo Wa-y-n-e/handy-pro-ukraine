@@ -62,7 +62,7 @@ function MapPage() {
   // Load + subscribe to masters
   useEffect(() => {
     const load = async () => {
-      let query = supabase.from("profiles")
+      let query = supabase.from("profiles_public" as never)
         .select("id, full_name, avatar_url, rating, status, verified, primary_category_slug, locked_lat, locked_lng")
         .eq("status", "free")
         .not("locked_lat", "is", null);
