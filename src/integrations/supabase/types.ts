@@ -69,24 +69,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "chats_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "chats_master_id_fkey"
             columns: ["master_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "chats_master_id_fkey"
-            columns: ["master_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -135,13 +121,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "disputes_opened_by_fkey"
-            columns: ["opened_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "disputes_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
@@ -169,13 +148,6 @@ export type Database = {
             columns: ["master_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "master_subcategories_master_id_fkey"
-            columns: ["master_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -244,13 +216,6 @@ export type Database = {
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -323,24 +288,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "orders_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "orders_master_id_fkey"
             columns: ["master_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "orders_master_id_fkey"
-            columns: ["master_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -380,13 +331,6 @@ export type Database = {
             columns: ["master_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "portfolio_photos_master_id_fkey"
-            columns: ["master_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -482,24 +426,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reviews_author_id_fkey"
-            columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "reviews_target_id_fkey"
             columns: ["target_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reviews_target_id_fkey"
-            columns: ["target_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -567,13 +497,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "transactions_master_id_fkey"
-            columns: ["master_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "transactions_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
@@ -602,56 +525,36 @@ export type Database = {
       }
     }
     Views: {
-      public_profiles: {
-        Row: {
+      [_ in never]: never
+    }
+    Functions: {
+      get_my_profile: {
+        Args: never
+        Returns: {
           avatar_url: string | null
           created_at: string | null
           experience_years: number | null
           full_name: string | null
           has_vehicle: boolean | null
-          id: string | null
+          id: string
+          locked_address: string | null
           locked_lat: number | null
           locked_lng: number | null
+          phone: string | null
           primary_category_slug: string | null
           rating: number | null
           status: Database["public"]["Enums"]["master_status"] | null
           tools_inventory: string | null
           verified: boolean | null
+          wallet_balance: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: false
+          isSetofReturn: true
         }
-        Insert: {
-          avatar_url?: string | null
-          created_at?: string | null
-          experience_years?: number | null
-          full_name?: string | null
-          has_vehicle?: boolean | null
-          id?: string | null
-          locked_lat?: never
-          locked_lng?: never
-          primary_category_slug?: string | null
-          rating?: number | null
-          status?: Database["public"]["Enums"]["master_status"] | null
-          tools_inventory?: string | null
-          verified?: boolean | null
-        }
-        Update: {
-          avatar_url?: string | null
-          created_at?: string | null
-          experience_years?: number | null
-          full_name?: string | null
-          has_vehicle?: boolean | null
-          id?: string | null
-          locked_lat?: never
-          locked_lng?: never
-          primary_category_slug?: string | null
-          rating?: number | null
-          status?: Database["public"]["Enums"]["master_status"] | null
-          tools_inventory?: string | null
-          verified?: boolean | null
-        }
-        Relationships: []
       }
-    }
-    Functions: {
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
