@@ -62,13 +62,13 @@ function MapPage() {
   // Load + subscribe to masters
   useEffect(() => {
     const load = async () => {
-      let query = supabase.from("profiles")
+      let query = supabase.from("profiles_public" as never)
         .select("id, full_name, avatar_url, rating, status, verified, primary_category_slug, locked_lat, locked_lng")
         .eq("status", "free")
         .not("locked_lat", "is", null);
       if (activeCat) query = query.eq("primary_category_slug", activeCat);
       const { data } = await query;
-      setMasters((data as MasterRow[]) ?? []);
+      setMasters(((data as unknown) as MasterRow[]) ?? []);
     };
     load();
     const ch = supabase.channel("masters-map")
