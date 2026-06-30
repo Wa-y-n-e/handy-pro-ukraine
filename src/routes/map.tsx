@@ -71,7 +71,7 @@ function MapPage() {
       setMasters(((data as unknown) as MasterRow[]) ?? []);
     };
     load();
-    const ch = supabase.channel("masters-map")
+    const ch = supabase.channel(`masters-map-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
