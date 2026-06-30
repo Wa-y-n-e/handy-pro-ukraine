@@ -68,7 +68,7 @@ function MapPage() {
         .not("locked_lat", "is", null);
       if (activeCat) query = query.eq("primary_category_slug", activeCat);
       const { data } = await query;
-      setMasters((data as MasterRow[]) ?? []);
+      setMasters(((data as unknown) as MasterRow[]) ?? []);
     };
     load();
     const ch = supabase.channel("masters-map")
