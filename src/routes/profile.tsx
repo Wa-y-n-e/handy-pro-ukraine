@@ -33,7 +33,7 @@ function ProfilePage() {
     (async () => {
       const profileQuery = isSelf
         ? supabase.rpc("get_my_profile").then((res) => ({ data: Array.isArray(res.data) ? res.data[0] : null }))
-        : supabase.from("profiles").select("id, full_name, avatar_url, rating, status, verified, has_vehicle, tools_inventory, experience_years, primary_category_slug, locked_lat, locked_lng, created_at").eq("id", id).single();
+        : supabase.from("profiles_public" as never).select("id, full_name, avatar_url, rating, status, verified, has_vehicle, tools_inventory, experience_years, primary_category_slug, locked_lat, locked_lng, created_at").eq("id", id).single();
       const [{ data: p }, { data: r }, { data: ph }, { data: rl }] = await Promise.all([
         profileQuery,
         supabase.from("reviews").select("id, rating, text, created_at, author:profiles!reviews_author_id_fkey(full_name)")
