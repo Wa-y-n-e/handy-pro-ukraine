@@ -51,7 +51,7 @@ function AuthPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-primary">Handy Pro</h1>
-          <p className="text-sm text-muted-foreground mt-1">Майстер поруч. Без обману.</p>
+          <p className="text-sm text-muted-foreground mt-1">Майстер поруч.</p>
         </div>
 
         <div className="rounded-2xl border bg-card shadow-lg p-5">
