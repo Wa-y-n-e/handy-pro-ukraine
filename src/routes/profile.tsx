@@ -1,11 +1,30 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession, type Profile } from "@/lib/use-session";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Star, BadgeCheck, Car, Wrench, Calendar, LogOut, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  BriefcaseBusiness,
+  CalendarDays,
+  Car,
+  CheckCircle2,
+  Clock3,
+  CreditCard,
+  HardHat,
+  Images,
+  LogOut,
+  Mail,
+  ShieldCheck,
+  Star,
+  UserRound,
+  Wrench,
+  Loader2,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/profile")({
@@ -13,16 +32,31 @@ export const Route = createFileRoute("/profile")({
   validateSearch: (s) => z.object({ id: z.string().optional() }).parse(s),
 });
 
-interface Review { id: string; rating: number; text: string | null; created_at: string; author: { full_name: string | null } | null }
-interface Photo { id: string; url: string }
+interface Review {
+  id: string;
+  rating: number;
+  text: string | null;
+  created_at: string;
+  author: { full_name: string | null } | null;
+}
+interface Photo {
+  id: string;
+  url: string;
+}
+interface ProfileView extends Profile {
+  created_at?: string;
+  role: "client" | "master" | "admin";
+  completed_jobs: number;
+  paid_jobs: number;
+}
 
 function ProfilePage() {
   const { id: viewId } = Route.useSearch();
   const { profile: me, role, user } = useSession();
-  const [target, setTarget] = useState<Profile | null>(null);
+  const navigate = useNavigate();
+  const [target, setTarget] = useState<ProfileView | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [targetRole, setTargetRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const id = viewId ?? me?.id;
@@ -31,137 +65,323 @@ function ProfilePage() {
   useEffect(() => {
     if (!id) return;
     (async () => {
-      const profileQuery = isSelf
-        ? supabase.rpc("get_my_profile").then((res) => ({ data: Array.isArray(res.data) ? res.data[0] : null }))
-        : supabase.from("profiles_public" as never).select("id, full_name, avatar_url, rating, status, verified, has_vehicle, tools_inventory, experience_years, primary_category_slug, locked_lat, locked_lng, created_at").eq("id", id).single();
-      const [{ data: p }, { data: r }, { data: ph }, { data: rl }] = await Promise.all([
-        profileQuery,
-        supabase.from("reviews").select("id, rating, text, created_at, author:profiles!reviews_author_id_fkey(full_name)")
-          .eq("target_id", id).order("created_at", { ascending: false }).limit(20),
-        supabase.from("portfolio_photos").select("id, url").eq("master_id", id).order("position"),
-        supabase.from("user_roles").select("role").eq("user_id", id).limit(1).maybeSingle(),
-      ]);
-      setTarget(p as unknown as Profile);
+      setLoading(true);
+      const [{ data: publicRows, error: profileError }, { data: r }, { data: ph }] =
+        await Promise.all([
+          supabase.rpc("get_public_profile" as never, { p_profile_id: id } as never),
+          supabase
+            .from("reviews")
+            .select(
+              "id, rating, text, created_at, author:profiles!reviews_author_id_fkey(full_name)",
+            )
+            .eq("target_id", id)
+            .order("created_at", { ascending: false })
+            .limit(20),
+          supabase.from("portfolio_photos").select("id, url").eq("master_id", id).order("position"),
+        ]);
+      const publicProfile =
+        (publicRows as unknown as Array<Record<string, unknown>> | null)?.[0] ?? null;
+      if (profileError || !publicProfile) {
+        toast.error("Не вдалося завантажити профіль");
+        setLoading(false);
+        return;
+      }
+      const privateProfile = isSelf ? me : null;
+      setTarget({
+        ...(privateProfile ?? {}),
+        ...publicProfile,
+        phone: privateProfile?.phone ?? null,
+        locked_address: privateProfile?.locked_address ?? null,
+        locked_lat: privateProfile?.locked_lat ?? null,
+        locked_lng: privateProfile?.locked_lng ?? null,
+        wallet_balance: privateProfile?.wallet_balance ?? 0,
+        role: (publicProfile.role as ProfileView["role"]) ?? role ?? "client",
+        completed_jobs: Number(publicProfile.completed_jobs ?? 0),
+        paid_jobs: Number(publicProfile.paid_jobs ?? 0),
+      } as ProfileView);
       setReviews((r as unknown as Review[]) ?? []);
       setPhotos((ph as Photo[]) ?? []);
-      setTargetRole(rl?.role ?? null);
       setLoading(false);
     })();
-  }, [id]);
+  }, [id, isSelf, me, role]);
 
   const toggleStatus = async (free: boolean) => {
     if (!me) return;
-    await supabase.from("profiles").update({ status: free ? "free" : "offline" }).eq("id", me.id);
+    const status = free ? "free" : "offline";
+    const { error } = await supabase.from("profiles").update({ status }).eq("id", me.id);
+    if (error) toast.error("Не вдалося змінити статус");
+    else setTarget((current) => (current ? { ...current, status } : current));
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
-  if (loading || !target) return <div className="flex justify-center pt-20"><Loader2 className="size-6 animate-spin text-primary" /></div>;
+  if (loading || !target)
+    return (
+      <div className="flex justify-center pt-20">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
 
-  const isMaster = targetRole === "master";
+  const isMaster = target.role === "master";
 
   return (
-    <div className="pb-6">
-      {/* Portfolio slider for masters */}
-      {isMaster && photos.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto p-3 snap-x">
-          {photos.map((p) => (
-            <img key={p.id} src={p.url} alt="" className="h-44 w-64 rounded-xl object-cover snap-start shrink-0" />
-          ))}
+    <div className="space-y-6 px-4 pb-8 pt-6">
+      <header className="flex min-h-10 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {!isSelf && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => navigate({ to: "/chats" })}
+              aria-label="Назад"
+            >
+              <ArrowLeft className="size-5" />
+            </Button>
+          )}
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold">{isSelf ? "Мій профіль" : "Профіль довіри"}</h1>
+            <p className="truncate text-xs text-muted-foreground">
+              {isMaster ? "Перевірений виконавець" : "Історія замовника"}
+            </p>
+          </div>
         </div>
-      )}
-      {isMaster && photos.length === 0 && (
-        <div className="bg-gradient-to-br from-primary/20 to-primary/5 h-40 flex items-center justify-center text-muted-foreground">
-          Портфоліо порожнє
-        </div>
+        <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
+          {isMaster ? "Майстер" : target.role === "admin" ? "Адміністратор" : "Клієнт"}
+        </span>
+      </header>
+
+      {isMaster && (
+        <section aria-labelledby="portfolio-title">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 id="portfolio-title" className="flex items-center gap-2 text-sm font-semibold">
+              <Images className="size-4 text-primary" /> Виконані роботи
+            </h2>
+            <span className="text-xs text-muted-foreground">{photos.length} фото</span>
+          </div>
+          {photos.length > 0 ? (
+            <div className="no-scrollbar flex snap-x gap-3 overflow-x-auto pb-1">
+              {photos.map((photo) => (
+                <img
+                  key={photo.id}
+                  src={photo.url}
+                  alt="Приклад виконаної роботи"
+                  className="h-44 w-[82%] shrink-0 snap-start rounded-lg border object-cover"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex min-h-24 items-center gap-3 rounded-lg border border-dashed bg-muted/30 px-4 text-sm text-muted-foreground">
+              <Images className="size-8 shrink-0 opacity-50" />
+              <span>
+                {isSelf ? "Додайте фотографії виконаних робіт" : "Майстер ще не додав портфоліо"}
+              </span>
+            </div>
+          )}
+        </section>
       )}
 
-      <div className="px-4 -mt-6 relative">
-        <div className="rounded-2xl bg-card border shadow-sm p-4">
-          <div className="flex items-start gap-3">
-            <div className="size-16 rounded-2xl bg-primary/15 flex items-center justify-center text-3xl shrink-0">
-              {target.avatar_url ? <img src={target.avatar_url} alt="" className="size-full rounded-2xl object-cover" /> : isMaster ? "👷" : "👤"}
+      <section
+        className="overflow-hidden rounded-lg border bg-card shadow-sm"
+        aria-label="Основна інформація профілю"
+      >
+        <div className="bg-teal-deep px-4 py-5 text-white">
+          <div className="flex items-center gap-4">
+            <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-white/70 bg-white/15">
+              {target.avatar_url ? (
+                <img
+                  src={target.avatar_url}
+                  alt={target.full_name ?? "Користувач"}
+                  className="size-full object-cover"
+                />
+              ) : isMaster ? (
+                <HardHat className="size-9" />
+              ) : (
+                <UserRound className="size-9" />
+              )}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1 flex-wrap">
-                <h2 className="text-xl font-bold">{target.full_name ?? "Користувач"}</h2>
-                {target.verified && <BadgeCheck className="size-5 text-blue-500" />}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h2 className="break-words text-xl font-bold">
+                  {target.full_name || (isMaster ? "Майстер" : "Клієнт")}
+                </h2>
+                {target.verified && (
+                  <BadgeCheck className="size-5 text-sky-200" aria-label="Профіль перевірено" />
+                )}
               </div>
-              <p className="text-sm flex items-center gap-1 mt-0.5">
-                <Star className="size-4 fill-amber-400 text-amber-400" />
-                <span className="font-semibold">{target.rating.toFixed(2)}</span>
-                <span className="text-muted-foreground">· {reviews.length} відгуків</span>
+              <p className="mt-1 flex items-center gap-1 text-sm text-white/85">
+                <CalendarDays className="size-4" /> У Handy Pro з {formatJoined(target.created_at)}
               </p>
-              {isSelf && <p className="text-xs text-muted-foreground mt-1">{user?.email}</p>}
+              <p className="mt-1 flex items-center gap-1 text-xs text-white/75">
+                <ShieldCheck className="size-4" /> Дані підтверджені історією сервісу
+              </p>
             </div>
           </div>
-
-          {/* Master "Паспорт" */}
-          {isMaster && (
-            <div className="grid grid-cols-3 gap-2 mt-4">
-              <Metric icon={Calendar} label="Досвід" value={`${target.experience_years} р.`} />
-              <Metric icon={Car} label="Авто" value={target.has_vehicle ? "Так" : "Ні"} />
-              <Metric icon={Wrench} label="Інструмент" value={target.tools_inventory ?? "Базовий"} />
-            </div>
-          )}
-
-          {/* Client trust panel (Uber style) */}
-          {!isMaster && !isSelf && (
-            <div className="mt-4 rounded-xl bg-muted/40 p-3 text-xs">
-              <p className="font-semibold">Клієнт перевірений</p>
-              <p className="text-muted-foreground mt-1">Завершено замовлень: <b>{Math.floor(target.rating * 20)}</b></p>
-            </div>
-          )}
-
-          {isSelf && role === "master" && (
-            <div className="mt-4 flex items-center justify-between rounded-xl bg-primary/5 border border-primary/20 p-3">
-              <div>
-                <p className="text-sm font-semibold">Шукаю роботу</p>
-                <p className="text-[11px] text-muted-foreground">Статус: {target.status === "free" ? "Видимий на мапі" : "Прихований"}</p>
-              </div>
-              <Switch checked={target.status === "free"} onCheckedChange={toggleStatus} disabled={target.wallet_balance < -400} />
-            </div>
-          )}
         </div>
 
-        {/* Reviews */}
-        <h3 className="mt-5 mb-2 px-1 text-sm font-semibold text-muted-foreground">Відгуки</h3>
+        <div className="grid grid-cols-3 divide-x py-4">
+          <TrustStat icon={Star} value={Number(target.rating).toFixed(2)} label="Рейтинг" accent />
+          <TrustStat icon={CheckCircle2} value={String(target.completed_jobs)} label="Завершено" />
+          <TrustStat
+            icon={isMaster ? BriefcaseBusiness : CreditCard}
+            value={String(isMaster ? reviews.length : target.paid_jobs)}
+            label={isMaster ? "Відгуків" : "Оплачено"}
+          />
+        </div>
+      </section>
+
+      {isSelf && role === "master" && (
+        <section className="flex items-center justify-between gap-4 rounded-lg border border-primary/25 bg-primary/5 p-4">
+          <div className="min-w-0">
+            <p className="font-semibold">Доступний для замовлень</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {target.wallet_balance < -400
+                ? "Профіль призупинено через борг"
+                : target.status === "free"
+                  ? "Ваш маркер видно на карті"
+                  : "Ваш маркер приховано"}
+            </p>
+          </div>
+          <Switch
+            checked={target.status === "free"}
+            onCheckedChange={toggleStatus}
+            disabled={target.wallet_balance < -400}
+            aria-label="Доступний для замовлень"
+          />
+        </section>
+      )}
+
+      {isMaster ? (
+        <section aria-labelledby="passport-title">
+          <div className="mb-2 flex items-center gap-2">
+            <ShieldCheck className="size-4 text-primary" />
+            <h2 id="passport-title" className="text-sm font-semibold">
+              Паспорт майстра
+            </h2>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Metric icon={Clock3} label="Досвід" value={`${target.experience_years || 0} р.`} />
+            <Metric icon={Car} label="Авто" value={target.has_vehicle ? "Є" : "Немає"} />
+            <Metric icon={Wrench} label="Інструмент" value={target.tools_inventory || "Базовий"} />
+          </div>
+        </section>
+      ) : (
+        <section className="rounded-lg border-l-4 border-l-primary bg-card px-4 py-3 shadow-sm">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" />
+            <div>
+              <h2 className="text-sm font-semibold">Надійність замовника</h2>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Рейтинг сформований майстрами лише після завершених замовлень. Оплачено через
+                сервіс: {target.paid_jobs}.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section aria-labelledby="reviews-title">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 id="reviews-title" className="text-sm font-semibold">
+            Відгуки
+          </h2>
+          <span className="text-xs text-muted-foreground">{reviews.length}</span>
+        </div>
         {reviews.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground py-6">Поки що немає відгуків</p>
+          <div className="rounded-lg border border-dashed py-8 text-center">
+            <Star className="mx-auto size-7 text-muted-foreground/40" />
+            <p className="mt-2 text-sm text-muted-foreground">Поки що немає відгуків</p>
+          </div>
         ) : (
           <div className="space-y-2">
-            {reviews.map((r) => (
-              <div key={r.id} className="rounded-xl border bg-card p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">{r.author?.full_name ?? "Користувач"}</p>
-                  <div className="flex">
-                    {[1,2,3,4,5].map((s) => <Star key={s} className={`size-3 ${s <= r.rating ? "fill-amber-400 text-amber-400" : "text-muted"}`} />)}
+            {reviews.map((review) => (
+              <article key={review.id} className="rounded-lg border bg-card p-3 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {review.author?.full_name ?? "Користувач Handy Pro"}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {new Date(review.created_at).toLocaleDateString("uk-UA", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0" aria-label={`${review.rating} з 5`}>
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <Star
+                        key={score}
+                        className={`size-3.5 ${score <= review.rating ? "fill-amber-400 text-amber-400" : "text-muted"}`}
+                      />
+                    ))}
                   </div>
                 </div>
-                {r.text && <p className="text-sm mt-1 text-muted-foreground">{r.text}</p>}
-              </div>
+                {review.text && (
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {review.text}
+                  </p>
+                )}
+              </article>
             ))}
           </div>
         )}
+      </section>
 
-        {isSelf && (
-          <Button variant="outline" onClick={signOut} className="w-full mt-6">
+      {isSelf && (
+        <section className="border-t pt-5">
+          {user?.email && (
+            <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <Mail className="size-4" /> <span className="min-w-0 truncate">{user.email}</span>
+            </div>
+          )}
+          <Button variant="outline" onClick={signOut} className="w-full">
             <LogOut className="size-4" /> Вийти
           </Button>
-        )}
-      </div>
+        </section>
+      )}
     </div>
   );
 }
 
-function Metric({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function TrustStat({
+  icon: Icon,
+  value,
+  label,
+  accent = false,
+}: {
+  icon: LucideIcon;
+  value: string;
+  label: string;
+  accent?: boolean;
+}) {
   return (
-    <div className="rounded-xl bg-muted/40 p-2 text-center">
-      <Icon className="size-4 mx-auto text-primary" />
-      <p className="text-[10px] text-muted-foreground mt-1">{label}</p>
-      <p className="text-xs font-semibold mt-0.5 truncate">{value}</p>
+    <div className="min-w-0 px-2 text-center">
+      <div className="flex items-center justify-center gap-1">
+        <Icon className={`size-4 ${accent ? "fill-amber-400 text-amber-400" : "text-primary"}`} />
+        <span className="text-lg font-bold">{value}</span>
+      </div>
+      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{label}</p>
     </div>
   );
+}
+
+function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg border bg-card p-3 text-center shadow-sm">
+      <Icon className="mx-auto size-5 text-primary" />
+      <p className="mt-1.5 text-[10px] text-muted-foreground">{label}</p>
+      <p className="mt-0.5 truncate text-xs font-semibold" title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function formatJoined(value?: string): string {
+  if (!value) return "сьогодні";
+  return new Date(value).toLocaleDateString("uk-UA", { month: "long", year: "numeric" });
 }

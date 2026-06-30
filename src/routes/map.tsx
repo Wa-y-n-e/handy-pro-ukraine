@@ -7,7 +7,16 @@ import { useSession } from "@/lib/use-session";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetHeader } from "@/components/ui/sheet";
-import { MapPin, Star, BadgeCheck, MessageCircle, FileText, Lock, Loader2, Search } from "lucide-react";
+import {
+  MapPin,
+  Star,
+  BadgeCheck,
+  MessageCircle,
+  FileText,
+  Lock,
+  Loader2,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { LatLngExpression, Map as LeafletMap, Marker as LeafletMarker } from "leaflet";
 
@@ -21,7 +30,16 @@ export const Route = createFileRoute("/map")({
   validateSearch: (s) => searchSchema.parse(s),
 });
 
-interface Cat { slug: string; name_uk: string; icon: string }
+interface Cat {
+  slug: string;
+  name_uk: string;
+  icon: string;
+}
+interface Sub {
+  id: string;
+  name_uk: string;
+  category_slug: string;
+}
 interface MasterRow {
   id: string;
   full_name: string | null;
@@ -32,6 +50,7 @@ interface MasterRow {
   primary_category_slug: string | null;
   locked_lat: number | null;
   locked_lng: number | null;
+  review_count: number;
 }
 
 function MapPage() {
@@ -42,40 +61,54 @@ function MapPage() {
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<LeafletMarker[]>([]);
   const [cats, setCats] = useState<Cat[]>([]);
+  const [subs, setSubs] = useState<Sub[]>([]);
   const [activeCat, setActiveCat] = useState<string | undefined>(cat);
+  const [activeSub, setActiveSub] = useState<string | undefined>(sub);
   const [masters, setMasters] = useState<MasterRow[]>([]);
   const [center, setCenter] = useState<LatLngExpression>(
-    profile?.locked_lat && profile?.locked_lng
-      ? [profile.locked_lat, profile.locked_lng]
-      : KHARKIV
+    profile?.locked_lat && profile?.locked_lng ? [profile.locked_lat, profile.locked_lng] : KHARKIV,
   );
+  const initialCenterRef = useRef(center);
   const [address, setAddress] = useState(profile?.locked_address ?? "");
   const [geocoding, setGeocoding] = useState(false);
   const [selected, setSelected] = useState<MasterRow | null>(null);
 
-  // Load categories
+  // Load categories and the label for an incoming subcategory filter.
   useEffect(() => {
-    supabase.from("categories").select("slug, name_uk, icon").order("position")
-      .then(({ data }) => setCats((data as Cat[]) ?? []));
+    Promise.all([
+      supabase.from("categories").select("slug, name_uk, icon").order("position"),
+      supabase.from("subcategories").select("id, name_uk, category_slug").order("position"),
+    ]).then(([{ data: categoryRows }, { data: subcategoryRows }]) => {
+      setCats((categoryRows as Cat[]) ?? []);
+      setSubs((subcategoryRows as Sub[]) ?? []);
+    });
   }, []);
 
   // Load + subscribe to masters
   useEffect(() => {
     const load = async () => {
-      let query = supabase.from("profiles_public" as never)
-        .select("id, full_name, avatar_url, rating, status, verified, primary_category_slug, locked_lat, locked_lng")
-        .eq("status", "free")
-        .not("locked_lat", "is", null);
-      if (activeCat) query = query.eq("primary_category_slug", activeCat);
-      const { data } = await query;
-      setMasters(((data as unknown) as MasterRow[]) ?? []);
+      const { data, error } = await supabase.rpc(
+        "get_available_masters" as never,
+        {
+          p_category_slug: activeCat ?? null,
+          p_subcategory_id: activeSub ?? null,
+        } as never,
+      );
+      if (error) {
+        toast.error("Не вдалося оновити майстрів на карті");
+        return;
+      }
+      setMasters((data as unknown as MasterRow[]) ?? []);
     };
     load();
-    const ch = supabase.channel(`masters-map-${Math.random().toString(36).slice(2)}`)
+    const ch = supabase
+      .channel(`masters-map-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [activeCat]);
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [activeCat, activeSub]);
 
   // Init Leaflet
   useEffect(() => {
@@ -83,12 +116,18 @@ function MapPage() {
     (async () => {
       const L = await import("leaflet");
       if (cancelled || !mapDiv.current || mapRef.current) return;
-      const map = L.map(mapDiv.current, { zoomControl: false, attributionControl: false })
-        .setView(center as [number, number], 13);
+      const map = L.map(mapDiv.current, { zoomControl: false, attributionControl: false }).setView(
+        initialCenterRef.current as [number, number],
+        13,
+      );
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
       mapRef.current = map;
     })();
-    return () => { cancelled = true; mapRef.current?.remove(); mapRef.current = null; };
+    return () => {
+      cancelled = true;
+      mapRef.current?.remove();
+      mapRef.current = null;
+    };
   }, []);
 
   // Update markers
@@ -104,7 +143,8 @@ function MapPage() {
       const userIcon = L.divIcon({
         className: "",
         html: `<div class="w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-lg ring-4 ring-blue-500/30"></div>`,
-        iconSize: [16, 16], iconAnchor: [8, 8],
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
       });
       const userMarker = L.marker(center as [number, number], { icon: userIcon }).addTo(map);
       markersRef.current.push(userMarker);
@@ -117,7 +157,8 @@ function MapPage() {
           html: `<div class="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-white shadow-lg ring-2 ring-white" data-cat="${iconKey}">
             <span style="font-size:18px">${categoryEmoji(iconKey)}</span>
           </div>`,
-          iconSize: [40, 40], iconAnchor: [20, 20],
+          iconSize: [40, 40],
+          iconAnchor: [20, 20],
         });
         const marker = L.marker([m.locked_lat, m.locked_lng], { icon }).addTo(map);
         marker.on("click", () => setSelected(m));
@@ -136,12 +177,20 @@ function MapPage() {
     setGeocoding(true);
     const r = await geocodeAddress(address);
     setGeocoding(false);
-    if (!r) { toast.error("Адресу не знайдено"); return; }
+    if (!r) {
+      toast.error("Адресу не знайдено");
+      return;
+    }
     setCenter([r.lat, r.lng]);
     if (profile) {
-      await supabase.from("profiles").update({
-        locked_address: r.display, locked_lat: r.lat, locked_lng: r.lng,
-      }).eq("id", profile.id);
+      await supabase
+        .from("profiles")
+        .update({
+          locked_address: r.display,
+          locked_lat: r.lat,
+          locked_lng: r.lng,
+        })
+        .eq("id", profile.id);
     }
     toast.success("Адресу зафіксовано", { description: r.display });
   };
@@ -154,15 +203,23 @@ function MapPage() {
   const openChat = async () => {
     if (!selected || !profile) return;
     const { data: existing } = await supabase
-      .from("chats").select("id")
-      .eq("client_id", profile.id).eq("master_id", selected.id)
-      .limit(1).maybeSingle();
+      .from("chats")
+      .select("id")
+      .eq("client_id", profile.id)
+      .eq("master_id", selected.id)
+      .limit(1)
+      .maybeSingle();
     let chatId = existing?.id;
     if (!chatId) {
       const { data: newChat, error } = await supabase
-        .from("chats").insert({ client_id: profile.id, master_id: selected.id })
-        .select("id").single();
-      if (error) { toast.error(error.message); return; }
+        .from("chats")
+        .insert({ client_id: profile.id, master_id: selected.id })
+        .select("id")
+        .single();
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
       chatId = newChat.id;
     }
     navigate({ to: "/chats/$id", params: { id: chatId } });
@@ -179,8 +236,12 @@ function MapPage() {
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input value={address} onChange={(e) => setAddress(e.target.value)}
-              placeholder="Валентинівська, 21" className="pl-9 h-10 rounded-xl" />
+            <Input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Валентинівська, 21"
+              className="pl-9 h-10 rounded-xl"
+            />
           </div>
           <Button onClick={overrideAddress} disabled={geocoding} className="h-10 rounded-xl">
             {geocoding ? <Loader2 className="size-4 animate-spin" /> : "Знайти"}
@@ -191,16 +252,27 @@ function MapPage() {
       {/* Category filter carousel */}
       <div className="absolute top-[88px] inset-x-0 z-20 px-2 py-2 overflow-x-auto no-scrollbar">
         <div className="flex gap-2 w-max">
-          <button onClick={() => setActiveCat(undefined)}
-            className={`shrink-0 rounded-full px-3 h-9 text-xs font-semibold border ${!activeCat ? "bg-primary text-primary-foreground border-primary" : "bg-background"}`}>
+          <button
+            onClick={() => {
+              setActiveCat(undefined);
+              setActiveSub(undefined);
+            }}
+            className={`shrink-0 rounded-full px-3 h-9 text-xs font-semibold border ${!activeCat ? "bg-primary text-primary-foreground border-primary" : "bg-background"}`}
+          >
             Усі
           </button>
           {cats.map((c) => {
             const Icon = CATEGORY_ICONS[c.slug];
             const active = activeCat === c.slug;
             return (
-              <button key={c.slug} onClick={() => setActiveCat(c.slug)}
-                className={`shrink-0 flex items-center gap-1.5 rounded-full px-3 h-9 text-xs font-semibold border ${active ? "bg-primary text-primary-foreground border-primary" : "bg-background"}`}>
+              <button
+                key={c.slug}
+                onClick={() => {
+                  setActiveCat(c.slug);
+                  setActiveSub(undefined);
+                }}
+                className={`shrink-0 flex items-center gap-1.5 rounded-full px-3 h-9 text-xs font-semibold border ${active ? "bg-primary text-primary-foreground border-primary" : "bg-background"}`}
+              >
                 {Icon && <Icon className="size-4" />}
                 <span className="max-w-[120px] truncate">{c.name_uk}</span>
               </button>
@@ -208,6 +280,21 @@ function MapPage() {
           })}
         </div>
       </div>
+
+      {activeSub && (
+        <div className="absolute top-[136px] left-3 right-3 z-20 flex items-center justify-between gap-3 rounded-md border bg-background/95 px-3 py-2 shadow-sm backdrop-blur">
+          <p className="min-w-0 truncate text-xs font-medium">
+            {subs.find((item) => item.id === activeSub)?.name_uk ?? "Обрана послуга"}
+          </p>
+          <button
+            type="button"
+            onClick={() => setActiveSub(undefined)}
+            className="shrink-0 text-xs font-semibold text-primary"
+          >
+            Скинути
+          </button>
+        </div>
+      )}
 
       <div ref={mapDiv} className="absolute inset-0 z-0" />
 
@@ -220,7 +307,15 @@ function MapPage() {
                 <SheetTitle className="sr-only">Профіль майстра</SheetTitle>
                 <div className="flex items-start gap-3">
                   <div className="size-16 rounded-2xl bg-primary/15 flex items-center justify-center text-3xl">
-                    {selected.avatar_url ? <img src={selected.avatar_url} alt="" className="size-full rounded-2xl object-cover" /> : "👷"}
+                    {selected.avatar_url ? (
+                      <img
+                        src={selected.avatar_url}
+                        alt=""
+                        className="size-full rounded-2xl object-cover"
+                      />
+                    ) : (
+                      "👷"
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 flex-wrap">
@@ -228,18 +323,32 @@ function MapPage() {
                       {selected.verified && <BadgeCheck className="size-5 text-blue-500" />}
                     </div>
                     <div className="flex items-center gap-3 text-sm mt-1">
-                      <span className="flex items-center gap-1 font-semibold"><Star className="size-4 fill-amber-400 text-amber-400" />{selected.rating.toFixed(2)}</span>
+                      <span className="flex items-center gap-1 font-semibold">
+                        <Star className="size-4 fill-amber-400 text-amber-400" />
+                        {selected.rating.toFixed(2)}
+                      </span>
                       {selectedDistance != null && (
-                        <span className="flex items-center gap-1 text-muted-foreground"><MapPin className="size-3" />{selectedDistance.toFixed(1)} км</span>
+                        <span className="flex items-center gap-1 text-muted-foreground">
+                          <MapPin className="size-3" />
+                          {selectedDistance.toFixed(1)} км
+                        </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{categoryName(cats, selected.primary_category_slug)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {categoryName(cats, selected.primary_category_slug)}
+                    </p>
                   </div>
                 </div>
               </SheetHeader>
               <div className="grid grid-cols-2 gap-2 mt-5">
-                <Button onClick={openChat} className="h-12 rounded-xl"><MessageCircle className="size-4" /> Чат</Button>
-                <Button variant="outline" onClick={() => navigate({ to: "/profile", search: { id: selected.id } as never })} className="h-12 rounded-xl">
+                <Button onClick={openChat} className="h-12 rounded-xl">
+                  <MessageCircle className="size-4" /> Чат
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate({ to: "/profile", search: { id: selected.id } as never })}
+                  className="h-12 rounded-xl"
+                >
                   <FileText className="size-4" /> Детальніше
                 </Button>
               </div>
@@ -252,11 +361,23 @@ function MapPage() {
 }
 
 function categoryEmoji(slug: string): string {
-  return ({
-    plumbing: "🔧", electric: "⚡", handyman: "🔨", doors_windows: "🚪",
-    furniture: "🛋️", appliances: "📺", micro_repair: "🧱", garden: "🌱",
-    labor: "💪", heavy: "🚜", internet: "🌐",
-  } as Record<string, string>)[slug] ?? "🔧";
+  return (
+    (
+      {
+        plumbing: "🔧",
+        electric: "⚡",
+        handyman: "🔨",
+        doors_windows: "🚪",
+        furniture: "🛋️",
+        appliances: "📺",
+        micro_repair: "🧱",
+        garden: "🌱",
+        labor: "💪",
+        heavy: "🚜",
+        internet: "🌐",
+      } as Record<string, string>
+    )[slug] ?? "🔧"
+  );
 }
 function categoryName(cats: Cat[], slug: string | null): string {
   return cats.find((c) => c.slug === slug)?.name_uk ?? "";

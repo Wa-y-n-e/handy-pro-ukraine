@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/use-session";
 import { CATEGORY_ICONS, isCurfewNow } from "@/lib/handy";
@@ -11,8 +11,17 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({ component: HomePage });
 
-interface Cat { slug: string; name_uk: string; icon: string; position: number }
-interface Sub { id: string; category_slug: string; name_uk: string }
+interface Cat {
+  slug: string;
+  name_uk: string;
+  icon: string;
+  position: number;
+}
+interface Sub {
+  id: string;
+  category_slug: string;
+  name_uk: string;
+}
 
 function HomePage() {
   const { user, profile } = useSession();
@@ -23,6 +32,7 @@ function HomePage() {
   const [grandma, setGrandma] = useState(false);
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(true);
+  const recordingStartedAt = useRef<number | null>(null);
   const curfew = isCurfewNow();
 
   useEffect(() => {
@@ -51,24 +61,48 @@ function HomePage() {
     });
   };
 
+  const startVoiceRequest = () => {
+    recordingStartedAt.current = Date.now();
+    setRecording(true);
+  };
+
+  const finishVoiceRequest = async () => {
+    if (!recordingStartedAt.current || !user) return;
+    const duration = Math.max(1, Math.round((Date.now() - recordingStartedAt.current) / 1000));
+    recordingStartedAt.current = null;
+    setRecording(false);
+    const { error } = await supabase.from("support_requests" as never).insert({
+      created_by: user.id,
+      kind: "voice",
+      duration_seconds: duration,
+      note: "Заявка зі спрощеного режиму",
+    } as never);
+    if (error) toast.error("Не вдалося надіслати заявку");
+    else toast.success("Заявку надіслано оператору");
+  };
+
   if (grandma) {
     return (
-      <div className="flex min-h-[calc(100vh-5rem)] flex-col items-center justify-center gap-6 px-6">
-        <div className="absolute top-3 right-4 flex items-center gap-2 text-sm">
+      <div className="fixed inset-0 z-50 flex min-h-screen flex-col items-center justify-center gap-6 overflow-y-auto bg-background px-6 py-20">
+        <div className="absolute right-4 top-[max(0.75rem,env(safe-area-inset-top))] flex items-center gap-2 text-sm">
           <span>Спрощений режим</span>
           <Switch checked={grandma} onCheckedChange={setGrandma} />
         </div>
         <h1 className="text-3xl font-bold text-center">Чим Вам допомогти?</h1>
         <button
-          onMouseDown={() => setRecording(true)}
-          onMouseUp={() => { setRecording(false); toast.success("Заявку надіслано оператору"); }}
-          onTouchStart={() => setRecording(true)}
-          onTouchEnd={() => { setRecording(false); toast.success("Заявку надіслано оператору"); }}
+          onPointerDown={startVoiceRequest}
+          onPointerUp={finishVoiceRequest}
+          onPointerCancel={() => {
+            recordingStartedAt.current = null;
+            setRecording(false);
+          }}
           className={`w-full max-w-sm rounded-3xl bg-primary text-primary-foreground py-12 text-2xl font-bold shadow-lg active:scale-95 transition flex flex-col items-center gap-3 ${recording ? "animate-pulse bg-red-600" : ""}`}
         >
           <Mic className="size-16" />
           🔨 ЗВИЧАЙНИЙ РЕМОНТ
-          <span className="text-base font-normal opacity-90">{recording ? "Запис..." : "Натисніть та утримуйте"}</span>
+          <span className="text-base font-normal opacity-90">
+            {recording ? "Запис..." : "Натисніть та утримуйте"}
+          </span>
         </button>
         <a
           href="tel:0800300900"
@@ -87,9 +121,7 @@ function HomePage() {
       <header className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-primary">Handy Pro</h1>
-          <p className="text-xs text-muted-foreground">
-            {profile?.locked_address ?? "Харків"}
-          </p>
+          <p className="text-xs text-muted-foreground">{profile?.locked_address ?? "Харків"}</p>
         </div>
         <label className="flex items-center gap-2 text-xs">
           <span>Спрощений</span>
@@ -117,7 +149,10 @@ function HomePage() {
             {suggestions.map((s) => (
               <button
                 key={s.id}
-                onClick={() => { setQ(""); goMap(s.category_slug, s.id); }}
+                onClick={() => {
+                  setQ("");
+                  goMap(s.category_slug, s.id);
+                }}
                 className="block w-full text-left px-3 py-2.5 text-sm hover:bg-accent border-b last:border-0"
               >
                 {s.name_uk}
@@ -128,7 +163,9 @@ function HomePage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>
+        <div className="flex justify-center py-12">
+          <Loader2 className="size-6 animate-spin text-primary" />
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {cats.map((c) => {
