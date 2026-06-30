@@ -43,6 +43,11 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS debt_ban_trigger ON public.profiles;
+CREATE TRIGGER debt_ban_trigger
+  BEFORE UPDATE OF wallet_balance, status ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.check_master_debt();
+
 -- Direct profile reads expose only public columns. Full self data remains behind
 -- get_my_profile(), while map coordinates are returned by the filtered master RPC.
 DROP POLICY IF EXISTS "profiles public read" ON public.profiles;
@@ -55,6 +60,7 @@ CREATE POLICY "profiles safe authenticated read" ON public.profiles
   USING (true);
 
 DROP POLICY IF EXISTS "profiles self upsert" ON public.profiles;
+DROP POLICY IF EXISTS "profiles self insert" ON public.profiles;
 CREATE POLICY "profiles self insert" ON public.profiles
   FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = id);
@@ -66,6 +72,8 @@ CREATE POLICY "profiles self update" ON public.profiles
   WITH CHECK (auth.uid() = id);
 
 REVOKE SELECT ON public.profiles FROM anon, authenticated;
+REVOKE SELECT (phone, wallet_balance, locked_address, locked_lat, locked_lng)
+  ON public.profiles FROM anon, authenticated;
 GRANT SELECT (
   id, full_name, avatar_url, rating, status, verified,
   has_vehicle, tools_inventory, experience_years,
@@ -88,6 +96,7 @@ REVOKE INSERT, UPDATE, DELETE ON public.user_roles FROM authenticated;
 
 -- Chats are participant-private. Admin access is limited to active arbitration.
 DROP POLICY IF EXISTS "chats participant read" ON public.chats;
+DROP POLICY IF EXISTS "chats participant or dispute admin read" ON public.chats;
 CREATE POLICY "chats participant or dispute admin read" ON public.chats
   FOR SELECT TO authenticated
   USING (
@@ -105,6 +114,7 @@ CREATE POLICY "chats participant insert" ON public.chats
   );
 
 DROP POLICY IF EXISTS "chats participant update" ON public.chats;
+DROP POLICY IF EXISTS "chats participant opens dispute" ON public.chats;
 CREATE POLICY "chats participant opens dispute" ON public.chats
   FOR UPDATE TO authenticated
   USING (auth.uid() IN (client_id, master_id))
@@ -116,6 +126,7 @@ GRANT UPDATE (dispute_active) ON public.chats TO authenticated;
 -- Message reads and writes follow chat membership. Admin access is only active
 -- while a dispute is open; RPCs can still write system messages as definer code.
 DROP POLICY IF EXISTS "msgs chat participant read" ON public.messages;
+DROP POLICY IF EXISTS "messages participant or dispute admin read" ON public.messages;
 CREATE POLICY "messages participant or dispute admin read" ON public.messages
   FOR SELECT TO authenticated
   USING (
@@ -131,6 +142,7 @@ CREATE POLICY "messages participant or dispute admin read" ON public.messages
   );
 
 DROP POLICY IF EXISTS "msgs chat participant write" ON public.messages;
+DROP POLICY IF EXISTS "messages participant or dispute admin insert" ON public.messages;
 CREATE POLICY "messages participant or dispute admin insert" ON public.messages
   FOR INSERT TO authenticated
   WITH CHECK (
@@ -206,6 +218,7 @@ REVOKE INSERT, UPDATE, DELETE ON public.transactions FROM authenticated;
 -- Disputes can be opened by an order participant only after the order enters
 -- disputed state. Resolution remains RPC-only and admin-gated.
 DROP POLICY IF EXISTS "disp read participant" ON public.disputes;
+DROP POLICY IF EXISTS "disputes participant or admin read" ON public.disputes;
 CREATE POLICY "disputes participant or admin read" ON public.disputes
   FOR SELECT TO authenticated
   USING (
@@ -221,6 +234,7 @@ CREATE POLICY "disputes participant or admin read" ON public.disputes
   );
 
 DROP POLICY IF EXISTS "disp insert participant" ON public.disputes;
+DROP POLICY IF EXISTS "disputes participant insert" ON public.disputes;
 CREATE POLICY "disputes participant insert" ON public.disputes
   FOR INSERT TO authenticated
   WITH CHECK (
@@ -599,6 +613,7 @@ CREATE POLICY "chat media participant insert" ON storage.objects
   );
 
 DROP POLICY IF EXISTS "chat media owner delete" ON storage.objects;
+DROP POLICY IF EXISTS "chat media owner or admin delete" ON storage.objects;
 CREATE POLICY "chat media owner or admin delete" ON storage.objects
   FOR DELETE TO authenticated
   USING (
