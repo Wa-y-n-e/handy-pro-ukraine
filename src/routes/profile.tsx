@@ -68,7 +68,7 @@ function ProfilePage() {
       setLoading(true);
       const [{ data: publicRows, error: profileError }, { data: r }, { data: ph }] =
         await Promise.all([
-          supabase.rpc("get_public_profile" as never, { p_profile_id: id } as never),
+          supabase.rpc("get_public_profile", { p_profile_id: id }),
           supabase
             .from("reviews")
             .select(
@@ -79,8 +79,7 @@ function ProfilePage() {
             .limit(20),
           supabase.from("portfolio_photos").select("id, url").eq("master_id", id).order("position"),
         ]);
-      const publicProfile =
-        (publicRows as unknown as Array<Record<string, unknown>> | null)?.[0] ?? null;
+      const publicProfile = publicRows?.[0] ?? null;
       if (profileError || !publicProfile) {
         toast.error("Не вдалося завантажити профіль");
         setLoading(false);
@@ -95,7 +94,7 @@ function ProfilePage() {
         locked_lat: privateProfile?.locked_lat ?? null,
         locked_lng: privateProfile?.locked_lng ?? null,
         wallet_balance: privateProfile?.wallet_balance ?? 0,
-        role: (publicProfile.role as ProfileView["role"]) ?? role ?? "client",
+        role: publicProfile.role ?? role ?? "client",
         completed_jobs: Number(publicProfile.completed_jobs ?? 0),
         paid_jobs: Number(publicProfile.paid_jobs ?? 0),
       } as ProfileView);

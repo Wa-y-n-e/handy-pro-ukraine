@@ -88,17 +88,17 @@ function MapPage() {
   useEffect(() => {
     const load = async () => {
       const { data, error } = await supabase.rpc(
-        "get_available_masters" as never,
+        "get_available_masters",
         {
-          p_category_slug: activeCat ?? null,
-          p_subcategory_id: activeSub ?? null,
-        } as never,
+          p_category_slug: activeCat,
+          p_subcategory_id: activeSub,
+        },
       );
       if (error) {
         toast.error("Не вдалося оновити майстрів на карті");
         return;
       }
-      setMasters((data as unknown as MasterRow[]) ?? []);
+      setMasters(data ?? []);
     };
     load();
     const ch = supabase
