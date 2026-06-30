@@ -128,3 +128,10 @@
 @utility animate-sos {
   animation: sos-pulse 1.6s ease-in-out infinite;
 }
+
+/* hide scrollbar on horizontal carousels */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* leaflet container default sizing */
+.leaflet-container { height: 100%; width: 100%; background: #e5e7eb; }
