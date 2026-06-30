@@ -11,64 +11,34 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { AppProvider } from "@/lib/app-context";
-import { AppShell } from "@/components/AppShell";
+import { AuthGate } from "@/components/AuthGate";
+import { BottomNav } from "@/components/BottomNav";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
-        <div className="mt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Go home
-          </Link>
-        </div>
+        <p className="mt-2 text-sm text-muted-foreground">Сторінку не знайдено</p>
+        <Link to="/" className="mt-6 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">На головну</Link>
       </div>
     </div>
   );
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
   const router = useRouter();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
-
+  useEffect(() => { reportLovableError(error, { boundary: "tanstack_root_error_component" }); }, [error]);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Try again
-          </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Go home
-          </a>
-        </div>
+        <h1 className="text-xl font-semibold">Сталася помилка</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+        <button
+          onClick={() => { router.invalidate(); reset(); }}
+          className="mt-6 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+        >Спробувати знову</button>
       </div>
     </div>
   );
@@ -78,19 +48,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Handy Pro — Trusted handyman, on demand" },
-      { name: "description", content: "Handy Pro — resilient on-demand handyman marketplace for Kharkiv: emergency SOS, secure escrow, anti-jamming map." },
-      { property: "og:title", content: "Handy Pro — Trusted handyman, on demand" },
-      { property: "og:description", content: "Handy Pro — resilient on-demand handyman marketplace for Kharkiv: emergency SOS, secure escrow, anti-jamming map." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Handy Pro — Trusted handyman, on demand" },
-      { name: "twitter:description", content: "Handy Pro — resilient on-demand handyman marketplace for Kharkiv: emergency SOS, secure escrow, anti-jamming map." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/785242b7-73ca-40db-86ce-aa9d9a009dd0/id-preview-285ddc36--389aa224-e658-4d95-afb3-7ba41ede685f.lovable.app-1782569215905.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/785242b7-73ca-40db-86ce-aa9d9a009dd0/id-preview-285ddc36--389aa224-e658-4d95-afb3-7ba41ede685f.lovable.app-1782569215905.png" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" },
+      { name: "theme-color", content: "#0d9488" },
+      { title: "Handy Pro — Надійний майстер поруч" },
+      { name: "description", content: "Handy Pro — миттєве замовлення майстра в Харкові. Безпечний ескроу, арбітраж, перевірені виконавці." },
+      { property: "og:title", content: "Handy Pro" },
+      { property: "og:description", content: "Майстри поруч. Безпечні розрахунки. Чесні відгуки." },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "stylesheet", href: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -100,14 +68,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
+    <html lang="uk">
+      <head><HeadContent /></head>
+      <body><div id="app">{children}</div><Scripts /></body>
     </html>
   );
 }
@@ -116,11 +79,13 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <AppProvider>
-        <AppShell>
+      <AuthGate>
+        <div className="mx-auto min-h-screen max-w-md bg-background pb-20">
           <Outlet />
-        </AppShell>
-      </AppProvider>
+        </div>
+        <BottomNav />
+        <Toaster position="top-center" richColors />
+      </AuthGate>
     </QueryClientProvider>
   );
 }
