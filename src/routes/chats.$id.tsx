@@ -59,7 +59,7 @@ function ChatRoom() {
       await supabase.from("messages").update({ read_at: new Date().toISOString() })
         .eq("chat_id", id).neq("sender_id", profile.id).is("read_at", null);
     })();
-    const ch = supabase.channel("chat-" + id)
+    const ch = supabase.channel(`chat-${id}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${id}` },
         (payload) => setMessages((m) => [...m, payload.new as Msg]))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `chat_id=eq.${id}` },
