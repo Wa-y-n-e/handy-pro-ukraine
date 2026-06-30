@@ -679,6 +679,25 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_public_profile: {
+        Args: { p_profile_id: string }
+        Returns: {
+          avatar_url: string
+          completed_jobs: number
+          created_at: string
+          experience_years: number
+          full_name: string
+          has_vehicle: boolean
+          id: string
+          paid_jobs: number
+          primary_category_slug: string
+          rating: number
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["master_status"]
+          tools_inventory: string
+          verified: boolean
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
