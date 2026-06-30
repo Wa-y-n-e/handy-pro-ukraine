@@ -102,21 +102,12 @@ function ChatRoom() {
   };
 
   const payPriceCard = async (m: Msg) => {
-    if (!chat || !profile) return;
-    // Create or update order
-    const { data: order } = await supabase.from("orders").insert({
-      client_id: chat.client_id,
-      master_id: chat.master_id,
-      price: m.price,
-      status: "accepted",
-      payment_method: "card",
-      escrow_status: "held",
-      address: "—",
-    }).select().single();
-    if (order) await supabase.from("chats").update({ order_id: order.id }).eq("id", id);
-    await supabase.from("transactions").insert({ order_id: order?.id, master_id: chat.master_id, kind: "hold", amount: m.price! });
-    await supabase.from("messages").insert({ chat_id: id, sender_id: profile.id, kind: "system",
-      body: `✅ Кошти ${m.price} ₴ заморожено на ескроу-рахунку` });
+    if (!chat || !profile || !m.price) return;
+    const { error } = await supabase.rpc("pay_escrow_hold", { p_chat_id: id, p_amount: m.price });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Оплачено. Кошти у безпеці.");
   };
 
