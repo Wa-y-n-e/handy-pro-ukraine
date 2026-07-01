@@ -1,9 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { DEBT_BAN_THRESHOLD } from "@/lib/handy";
+import {
+  AVATAR_MAX_BYTES,
+  PORTFOLIO_MAX_BYTES,
+  PORTFOLIO_PHOTOS_BUCKET,
+  PROFILE_AVATARS_BUCKET,
+  createProfileMediaPath,
+  getOwnedPublicObjectPath,
+  validateProfileImage,
+} from "@/lib/profile-media";
 import { useSession, type Profile } from "@/lib/use-session";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,7 +37,6 @@ import {
   Clock3,
   CreditCard,
   HardHat,
-  ImagePlus,
   Images,
   Layers3,
   MapPin,
@@ -39,6 +47,7 @@ import {
   ShieldCheck,
   Star,
   Trash2,
+  Upload,
   UserRound,
   Wrench,
   Loader2,
@@ -86,6 +95,8 @@ function ProfilePage() {
   const { id: viewId } = Route.useSearch();
   const { profile: me, role, setProfile } = useSession();
   const navigate = useNavigate();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const portfolioInputRef = useRef<HTMLInputElement>(null);
   const [target, setTarget] = useState<ProfileView | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -97,6 +108,7 @@ function ProfilePage() {
   const [draft, setDraft] = useState<MasterProfileDraft | null>(null);
   const [portfolioUrl, setPortfolioUrl] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [savingServices, setSavingServices] = useState(false);
   const [portfolioBusy, setPortfolioBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -182,10 +194,17 @@ function ProfilePage() {
     [categories, target?.primary_category_slug],
   );
 
-  const editableSubcategories = useMemo(
-    () => subcategories.filter((subcategory) => subcategory.category_slug === serviceCategory),
-    [serviceCategory, subcategories],
-  );
+  const selectedCategorySlugs = useMemo(() => {
+    const selected = new Set(selectedSubcategoryIds);
+    return categories
+      .filter((category) =>
+        subcategories.some(
+          (subcategory) =>
+            subcategory.category_slug === category.slug && selected.has(subcategory.id),
+        ),
+      )
+      .map((category) => category.slug);
+  }, [categories, selectedSubcategoryIds, subcategories]);
 
   const publicSubcategories = useMemo(() => {
     const selected = new Set(savedSubcategoryIds);
@@ -227,6 +246,57 @@ function ProfilePage() {
       setTarget((current) => (current ? { ...current, status } : current));
       setProfile({ ...me, status });
     }
+  };
+
+  const uploadAvatar = async (file: File | null) => {
+    if (!me || role !== "master") return;
+    const validationError = validateProfileImage(file, AVATAR_MAX_BYTES);
+    if (validationError || !file) {
+      toast.error(validationError ?? "Оберіть файл зображення");
+      return;
+    }
+
+    const objectPath = createProfileMediaPath("avatars", me.id, file);
+    setUploadingAvatar(true);
+    const { error: uploadError } = await supabase.storage
+      .from(PROFILE_AVATARS_BUCKET)
+      .upload(objectPath, file, { cacheControl: "3600", contentType: file.type, upsert: false });
+    if (uploadError) {
+      setUploadingAvatar(false);
+      toast.error("Не вдалося завантажити фото профілю");
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(PROFILE_AVATARS_BUCKET)
+      .getPublicUrl(objectPath);
+    const changes: Database["public"]["Tables"]["profiles"]["Update"] = {
+      avatar_url: publicUrlData.publicUrl,
+    };
+    const { error: profileError } = await supabase.from("profiles").update(changes).eq("id", me.id);
+    if (profileError) {
+      await supabase.storage.from(PROFILE_AVATARS_BUCKET).remove([objectPath]);
+      setUploadingAvatar(false);
+      toast.error("Фото завантажено, але профіль не вдалося оновити");
+      return;
+    }
+
+    const previousObjectPath = me.avatar_url
+      ? getOwnedPublicObjectPath(me.avatar_url, PROFILE_AVATARS_BUCKET, "avatars", me.id)
+      : null;
+    const nextProfile = { ...me, avatar_url: publicUrlData.publicUrl };
+    setProfile(nextProfile);
+    setTarget((current) =>
+      current ? { ...current, avatar_url: publicUrlData.publicUrl } : current,
+    );
+    setDraft((current) =>
+      current ? { ...current, avatar_url: publicUrlData.publicUrl } : current,
+    );
+    if (previousObjectPath && previousObjectPath !== objectPath) {
+      await supabase.storage.from(PROFILE_AVATARS_BUCKET).remove([previousObjectPath]);
+    }
+    setUploadingAvatar(false);
+    toast.success("Фото профілю оновлено");
   };
 
   const saveMasterProfile = async () => {
@@ -285,44 +355,50 @@ function ProfilePage() {
     toast.success("Профіль оновлено");
   };
 
-  const changeServiceCategory = (categorySlug: string) => {
-    const allowedIds = new Set(
-      subcategories
-        .filter((subcategory) => subcategory.category_slug === categorySlug)
-        .map((subcategory) => subcategory.id),
-    );
-    setServiceCategory(categorySlug);
-    setSelectedSubcategoryIds(savedSubcategoryIds.filter((id) => allowedIds.has(id)));
-  };
-
   const toggleSubcategory = (subcategoryId: string, checked: boolean) => {
-    setSelectedSubcategoryIds((current) =>
-      checked
-        ? [...new Set([...current, subcategoryId])]
-        : current.filter((id) => id !== subcategoryId),
-    );
+    const next = checked
+      ? [...new Set([...selectedSubcategoryIds, subcategoryId])]
+      : selectedSubcategoryIds.filter((id) => id !== subcategoryId);
+    setSelectedSubcategoryIds(next);
+    setServiceCategory((currentPrimary) => {
+      if (!currentPrimary) return currentPrimary;
+      const primaryStillSelected = next.some(
+        (id) =>
+          subcategories.find((subcategory) => subcategory.id === id)?.category_slug ===
+          currentPrimary,
+      );
+      return primaryStillSelected ? currentPrimary : "";
+    });
   };
 
   const saveServices = async () => {
-    if (!me || !serviceCategory) {
-      toast.error("Оберіть категорію");
+    if (!me) return;
+    const validIds = new Set(subcategories.map((subcategory) => subcategory.id));
+    const desiredIds = selectedSubcategoryIds.filter((id) => validIds.has(id));
+    if (desiredIds.length === 0) {
+      toast.error("Оберіть хоча б одну послугу");
       return;
     }
-    const allowedIds = new Set(editableSubcategories.map((subcategory) => subcategory.id));
-    const desiredIds = selectedSubcategoryIds.filter((id) => allowedIds.has(id));
+    const desiredIdSet = new Set(desiredIds);
+    const categorySlugsWithServices = categories
+      .filter((category) =>
+        subcategories.some(
+          (subcategory) =>
+            subcategory.category_slug === category.slug && desiredIdSet.has(subcategory.id),
+        ),
+      )
+      .map((category) => category.slug);
+    const primaryCategorySlug = categorySlugsWithServices.includes(serviceCategory)
+      ? serviceCategory
+      : categorySlugsWithServices[0];
+    if (!primaryCategorySlug) {
+      toast.error("Не вдалося визначити основну категорію");
+      return;
+    }
+
     const toInsert = desiredIds.filter((id) => !savedSubcategoryIds.includes(id));
     const toDelete = savedSubcategoryIds.filter((id) => !desiredIds.includes(id));
     setSavingServices(true);
-
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ primary_category_slug: serviceCategory })
-      .eq("id", me.id);
-    if (profileError) {
-      setSavingServices(false);
-      toast.error("Не вдалося зберегти категорію");
-      return;
-    }
 
     if (toInsert.length > 0) {
       const { error } = await supabase.from("master_subcategories").insert(
@@ -350,15 +426,76 @@ function ProfilePage() {
       }
     }
 
-    const nextProfile = { ...me, primary_category_slug: serviceCategory };
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ primary_category_slug: primaryCategorySlug })
+      .eq("id", me.id);
+    if (profileError) {
+      setSavingServices(false);
+      toast.error("Послуги збережено, але основну категорію не вдалося оновити");
+      return;
+    }
+
+    const nextProfile = { ...me, primary_category_slug: primaryCategorySlug };
     setProfile(nextProfile);
     setTarget((current) =>
-      current ? { ...current, primary_category_slug: serviceCategory } : current,
+      current ? { ...current, primary_category_slug: primaryCategorySlug } : current,
     );
+    setServiceCategory(primaryCategorySlug);
     setSavedSubcategoryIds(desiredIds);
     setSelectedSubcategoryIds(desiredIds);
     setSavingServices(false);
-    toast.success("Послуги оновлено");
+    toast.success("Послуги оновлено", {
+      description:
+        serviceCategory === primaryCategorySlug
+          ? undefined
+          : "Основною автоматично обрано першу категорію з послугами.",
+    });
+  };
+
+  const uploadPortfolioPhoto = async (file: File | null) => {
+    if (!me || role !== "master") return;
+    const validationError = validateProfileImage(file, PORTFOLIO_MAX_BYTES);
+    if (validationError || !file) {
+      toast.error(validationError ?? "Оберіть файл зображення");
+      return;
+    }
+
+    const objectPath = createProfileMediaPath("portfolio", me.id, file);
+    setPortfolioBusy("upload");
+    const { error: uploadError } = await supabase.storage
+      .from(PORTFOLIO_PHOTOS_BUCKET)
+      .upload(objectPath, file, { cacheControl: "3600", contentType: file.type, upsert: false });
+    if (uploadError) {
+      setPortfolioBusy(null);
+      toast.error("Не вдалося завантажити фото роботи");
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(PORTFOLIO_PHOTOS_BUCKET)
+      .getPublicUrl(objectPath);
+    const position = photos.reduce((max, photo) => Math.max(max, photo.position ?? 0), -1) + 1;
+    const portfolioRow: Database["public"]["Tables"]["portfolio_photos"]["Insert"] = {
+      master_id: me.id,
+      url: publicUrlData.publicUrl,
+      position,
+    };
+    const { data, error: insertError } = await supabase
+      .from("portfolio_photos")
+      .insert(portfolioRow)
+      .select("id, url, position")
+      .single();
+    if (insertError) {
+      await supabase.storage.from(PORTFOLIO_PHOTOS_BUCKET).remove([objectPath]);
+      setPortfolioBusy(null);
+      toast.error("Фото завантажено, але не вдалося додати його до портфоліо");
+      return;
+    }
+
+    setPhotos((current) => [...current, data]);
+    setPortfolioBusy(null);
+    toast.success("Фото роботи додано");
   };
 
   const addPortfolioPhoto = async () => {
@@ -387,18 +524,37 @@ function ProfilePage() {
 
   const deletePortfolioPhoto = async (photoId: string) => {
     if (!me) return;
+    const photo = photos.find((item) => item.id === photoId);
+    if (!photo) return;
     setPortfolioBusy(photoId);
     const { error } = await supabase
       .from("portfolio_photos")
       .delete()
       .eq("id", photoId)
       .eq("master_id", me.id);
-    setPortfolioBusy(null);
     if (error) {
+      setPortfolioBusy(null);
       toast.error("Не вдалося видалити фото");
       return;
     }
     setPhotos((current) => current.filter((photo) => photo.id !== photoId));
+    const objectPath = getOwnedPublicObjectPath(
+      photo.url,
+      PORTFOLIO_PHOTOS_BUCKET,
+      "portfolio",
+      me.id,
+    );
+    if (objectPath) {
+      const { error: storageError } = await supabase.storage
+        .from(PORTFOLIO_PHOTOS_BUCKET)
+        .remove([objectPath]);
+      if (storageError) {
+        setPortfolioBusy(null);
+        toast.warning("Фото видалено з профілю, але файл не вдалося очистити");
+        return;
+      }
+    }
+    setPortfolioBusy(null);
     toast.success("Фото видалено");
   };
 
@@ -620,21 +776,55 @@ function ProfilePage() {
                 maxLength={80}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="master-avatar">Фото профілю</Label>
-              <Input
-                id="master-avatar"
-                type="url"
-                inputMode="url"
-                value={draft.avatar_url}
-                onChange={(event) =>
-                  setDraft((current) =>
-                    current ? { ...current, avatar_url: event.target.value } : current,
-                  )
-                }
-                maxLength={1000}
-                placeholder="https://"
+            <div className="space-y-2">
+              <Label htmlFor="master-avatar-file">Фото профілю</Label>
+              <input
+                ref={avatarInputRef}
+                id="master-avatar-file"
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(event) => {
+                  void uploadAvatar(event.currentTarget.files?.[0] ?? null);
+                  event.currentTarget.value = "";
+                }}
               />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar || savingProfile}
+                className="w-full"
+              >
+                {uploadingAvatar ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Upload className="size-4" />
+                )}
+                Завантажити фото профілю
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Фото профілю бачать клієнти. До 5 МБ, JPG, PNG, WEBP, GIF або AVIF.
+              </p>
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer font-medium text-foreground">
+                  Додатково: фото за посиланням
+                </summary>
+                <Input
+                  id="master-avatar-url"
+                  type="url"
+                  inputMode="url"
+                  value={draft.avatar_url}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current ? { ...current, avatar_url: event.target.value } : current,
+                    )
+                  }
+                  maxLength={1000}
+                  placeholder="https://"
+                  className="mt-2"
+                />
+              </details>
             </div>
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
               <div className="space-y-1.5">
@@ -697,7 +887,11 @@ function ProfilePage() {
                 Координати не змінюються тут. Оновіть точку у вкладці «Карта».
               </p>
             </div>
-            <Button onClick={saveMasterProfile} disabled={savingProfile} className="w-full">
+            <Button
+              onClick={saveMasterProfile}
+              disabled={savingProfile || uploadingAvatar}
+              className="w-full"
+            >
               {savingProfile ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -723,46 +917,82 @@ function ProfilePage() {
           {isSelf && role === "master" ? (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="master-category">Категорія</Label>
-                <Select value={serviceCategory} onValueChange={changeServiceCategory}>
+                <Label htmlFor="master-category">Основна категорія</Label>
+                <Select
+                  value={selectedCategorySlugs.includes(serviceCategory) ? serviceCategory : ""}
+                  onValueChange={setServiceCategory}
+                  disabled={selectedCategorySlugs.length === 0 || savingServices}
+                >
                   <SelectTrigger id="master-category">
-                    <SelectValue placeholder="Оберіть категорію" />
+                    <SelectValue
+                      placeholder={
+                        selectedCategorySlugs.length > 0
+                          ? `Автоматично: ${categories.find((category) => category.slug === selectedCategorySlugs[0])?.name_uk ?? "перша обрана"}`
+                          : "Спочатку оберіть послуги"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.slug} value={category.slug}>
-                        {category.name_uk}
-                      </SelectItem>
-                    ))}
+                    {categories
+                      .filter((category) => selectedCategorySlugs.includes(category.slug))
+                      .map((category) => (
+                        <SelectItem key={category.slug} value={category.slug}>
+                          {category.name_uk}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Основна категорія потрібна для пошуку на карті. Якщо її не обрати, збережемо першу
+                  категорію з вибраними послугами.
+                </p>
               </div>
-              {editableSubcategories.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Підкатегорії</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {editableSubcategories.map((subcategory) => {
-                      const checkboxId = `subcategory-${subcategory.id}`;
-                      return (
-                        <label
-                          key={subcategory.id}
-                          htmlFor={checkboxId}
-                          className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm"
-                        >
-                          <Checkbox
-                            id={checkboxId}
-                            checked={selectedSubcategoryIds.includes(subcategory.id)}
-                            onCheckedChange={(checked) =>
-                              toggleSubcategory(subcategory.id, checked === true)
-                            }
-                          />
-                          <span className="leading-snug">{subcategory.name_uk}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">Послуги за категоріями</p>
+                  <span className="text-xs text-muted-foreground">
+                    Обрано: {selectedSubcategoryIds.length}
+                  </span>
                 </div>
-              )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Можна обрати послуги з кількох категорій.
+                </p>
+                <div className="mt-3 divide-y">
+                  {categories.map((category) => {
+                    const categorySubcategories = subcategories.filter(
+                      (subcategory) => subcategory.category_slug === category.slug,
+                    );
+                    if (categorySubcategories.length === 0) return null;
+                    return (
+                      <section key={category.slug} className="py-3 first:pt-0 last:pb-0">
+                        <h3 className="text-xs font-semibold">{category.name_uk}</h3>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {categorySubcategories.map((subcategory) => {
+                            const checkboxId = `subcategory-${subcategory.id}`;
+                            return (
+                              <label
+                                key={subcategory.id}
+                                htmlFor={checkboxId}
+                                className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                              >
+                                <Checkbox
+                                  id={checkboxId}
+                                  checked={selectedSubcategoryIds.includes(subcategory.id)}
+                                  onCheckedChange={(checked) =>
+                                    toggleSubcategory(subcategory.id, checked === true)
+                                  }
+                                  disabled={savingServices}
+                                />
+                                <span className="leading-snug">{subcategory.name_uk}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              </div>
               <Button onClick={saveServices} disabled={savingServices} className="w-full">
                 {savingServices ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -774,8 +1004,11 @@ function ProfilePage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-base font-semibold">
-                {primaryCategory?.name_uk ?? "Категорію не вказано"}
+              <p className="text-sm text-muted-foreground">
+                Основна категорія:{" "}
+                <span className="font-semibold text-foreground">
+                  {primaryCategory?.name_uk ?? "не вказана"}
+                </span>
               </p>
               {publicSubcategories.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -833,34 +1066,64 @@ function ProfilePage() {
           </div>
           {isSelf && role === "master" && (
             <div className="mb-3 rounded-lg border bg-card p-3 shadow-sm">
-              <Label htmlFor="portfolio-url" className="mb-2 flex items-center gap-1.5">
-                <ImagePlus className="size-4" /> Додати фото за посиланням
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="portfolio-url"
-                  type="url"
-                  inputMode="url"
-                  value={portfolioUrl}
-                  onChange={(event) => setPortfolioUrl(event.target.value)}
-                  maxLength={1000}
-                  placeholder="https://"
-                />
-                <Button
-                  type="button"
-                  onClick={addPortfolioPhoto}
-                  disabled={portfolioBusy !== null}
-                  aria-label="Додати фото"
-                  title="Додати фото"
-                  className="shrink-0"
-                >
-                  {portfolioBusy === "add" ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Plus className="size-4" />
-                  )}
-                </Button>
-              </div>
+              <input
+                ref={portfolioInputRef}
+                id="portfolio-file"
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(event) => {
+                  void uploadPortfolioPhoto(event.currentTarget.files?.[0] ?? null);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => portfolioInputRef.current?.click()}
+                disabled={portfolioBusy !== null}
+                className="w-full"
+              >
+                {portfolioBusy === "upload" ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Upload className="size-4" />
+                )}
+                Додати фото роботи
+              </Button>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Фото робіт допомагають клієнтам обрати майстра. До 10 МБ.
+              </p>
+              <details className="mt-3 text-xs text-muted-foreground">
+                <summary className="cursor-pointer font-medium text-foreground">
+                  Додатково: додати за посиланням
+                </summary>
+                <div className="mt-2 flex gap-2">
+                  <Input
+                    id="portfolio-url"
+                    type="url"
+                    inputMode="url"
+                    value={portfolioUrl}
+                    onChange={(event) => setPortfolioUrl(event.target.value)}
+                    maxLength={1000}
+                    placeholder="https://"
+                  />
+                  <Button
+                    type="button"
+                    onClick={addPortfolioPhoto}
+                    disabled={portfolioBusy !== null}
+                    aria-label="Додати фото за посиланням"
+                    title="Додати фото за посиланням"
+                    className="shrink-0"
+                  >
+                    {portfolioBusy === "add" ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                  </Button>
+                </div>
+              </details>
             </div>
           )}
           {photos.length > 0 ? (
