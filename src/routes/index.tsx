@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/use-session";
+import { useSimplifiedModePreference } from "@/lib/preferences";
 import { CATEGORY_ICONS, isCurfewNow } from "@/lib/handy";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ function HomePage() {
   const [cats, setCats] = useState<Cat[]>([]);
   const [subs, setSubs] = useState<Sub[]>([]);
   const [q, setQ] = useState("");
-  const [grandma, setGrandma] = useState(false);
+  const [grandma, setGrandma] = useSimplifiedModePreference();
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(true);
   const recordingStartedAt = useRef<number | null>(null);

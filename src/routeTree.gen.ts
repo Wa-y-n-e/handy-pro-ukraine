@@ -15,6 +15,7 @@ import { Route as MapRouteImport } from './routes/map'
 import { Route as ChatsRouteImport } from './routes/chats'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProfileSettingsRouteImport } from './routes/profile_.settings'
 import { Route as ChatsIdRouteImport } from './routes/chats.$id'
 
 const ProfileRoute = ProfileRouteImport.update({
@@ -47,6 +48,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfileSettingsRoute = ProfileSettingsRouteImport.update({
+  id: '/profile_/settings',
+  path: '/profile/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatsIdRoute = ChatsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/orders': typeof OrdersRoute
   '/profile': typeof ProfileRoute
   '/chats/$id': typeof ChatsIdRoute
+  '/profile/settings': typeof ProfileSettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/orders': typeof OrdersRoute
   '/profile': typeof ProfileRoute
   '/chats/$id': typeof ChatsIdRoute
+  '/profile/settings': typeof ProfileSettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,13 +88,29 @@ export interface FileRoutesById {
   '/orders': typeof OrdersRoute
   '/profile': typeof ProfileRoute
   '/chats/$id': typeof ChatsIdRoute
+  '/profile_/settings': typeof ProfileSettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/auth' | '/chats' | '/map' | '/orders' | '/profile' | '/chats/$id'
+    | '/'
+    | '/auth'
+    | '/chats'
+    | '/map'
+    | '/orders'
+    | '/profile'
+    | '/chats/$id'
+    | '/profile/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/chats' | '/map' | '/orders' | '/profile' | '/chats/$id'
+  to:
+    | '/'
+    | '/auth'
+    | '/chats'
+    | '/map'
+    | '/orders'
+    | '/profile'
+    | '/chats/$id'
+    | '/profile/settings'
   id:
     | '__root__'
     | '/'
@@ -96,6 +120,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/profile'
     | '/chats/$id'
+    | '/profile_/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -105,6 +130,7 @@ export interface RootRouteChildren {
   MapRoute: typeof MapRoute
   OrdersRoute: typeof OrdersRoute
   ProfileRoute: typeof ProfileRoute
+  ProfileSettingsRoute: typeof ProfileSettingsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -151,6 +177,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profile_/settings': {
+      id: '/profile_/settings'
+      path: '/profile/settings'
+      fullPath: '/profile/settings'
+      preLoaderRoute: typeof ProfileSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chats/$id': {
       id: '/chats/$id'
       path: '/$id'
@@ -178,7 +211,18 @@ const rootRouteChildren: RootRouteChildren = {
   MapRoute: MapRoute,
   OrdersRoute: OrdersRoute,
   ProfileRoute: ProfileRoute,
+  ProfileSettingsRoute: ProfileSettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

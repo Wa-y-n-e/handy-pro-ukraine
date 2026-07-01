@@ -30,12 +30,11 @@ import {
   ImagePlus,
   Images,
   Layers3,
-  LogOut,
-  Mail,
   MapPin,
   PencilLine,
   Plus,
   Save,
+  Settings,
   ShieldCheck,
   Star,
   Trash2,
@@ -84,7 +83,7 @@ interface MasterProfileDraft {
 
 function ProfilePage() {
   const { id: viewId } = Route.useSearch();
-  const { profile: me, role, user, setProfile } = useSession();
+  const { profile: me, role, setProfile } = useSession();
   const navigate = useNavigate();
   const [target, setTarget] = useState<ProfileView | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -383,10 +382,6 @@ function ProfilePage() {
     toast.success("Фото видалено");
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
-
   if (loading || !target)
     return (
       <div className="flex justify-center pt-20">
@@ -424,9 +419,23 @@ function ProfilePage() {
             </p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
-          {isMaster ? "Майстер" : target.role === "admin" ? "Адміністратор" : "Клієнт"}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
+            {isMaster ? "Майстер" : target.role === "admin" ? "Адміністратор" : "Клієнт"}
+          </span>
+          {isSelf && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => navigate({ to: "/profile/settings" })}
+              aria-label="Налаштування"
+              title="Налаштування"
+            >
+              <Settings className="size-5" />
+            </Button>
+          )}
+        </div>
       </header>
 
       <section
@@ -855,18 +864,6 @@ function ProfilePage() {
         )}
       </section>
 
-      {isSelf && (
-        <section className="border-t pt-5">
-          {user?.email && (
-            <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Mail className="size-4" /> <span className="min-w-0 truncate">{user.email}</span>
-            </div>
-          )}
-          <Button variant="outline" onClick={signOut} className="w-full">
-            <LogOut className="size-4" /> Вийти
-          </Button>
-        </section>
-      )}
     </div>
   );
 }
