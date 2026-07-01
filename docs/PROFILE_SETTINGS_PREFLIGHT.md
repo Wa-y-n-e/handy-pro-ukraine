@@ -4,7 +4,7 @@ Audit date: 2026-07-01
 
 Audit branch base: `ca767abce0b9fa0d02fabe7c790c293bce6dc580` (`origin/main` at audit time).
 The SHA supplied in the task, `248029abfaf241823f1960932d41cf77d75ebc31`, is an ancestor of
-that commit. No application code or SQL was changed by this audit.
+that commit. No application logic, UI, or SQL was changed by this audit.
 
 ## 1. Current Profile structure
 
@@ -72,9 +72,9 @@ unsupported security, payment, insurance, or verification claims.
 
 ### Problem report
 
-An authenticated problem-report form can enqueue a support request after the generated types are
-resynchronized. It should accept a short user-written note, avoid automatically attaching private
-profile data, and show that a request was submitted rather than claiming the issue was resolved.
+An authenticated problem-report form can enqueue a support request through the restored generated
+contract. It should accept a short user-written note, avoid automatically attaching private profile
+data, and show that a request was submitted rather than claiming the issue was resolved.
 
 ## 4. Can `support_requests` support the proposed requests?
 
@@ -96,9 +96,20 @@ for automated account deletion or issue triage.
 
 ## 5. Exact `support_requests` generated-type fields
 
-**Current finding: `support_requests` is absent from
-`src/integrations/supabase/types.ts`. Therefore no `Row`, `Insert`, `Update`, or relationship fields
-are currently available from generated types.**
+**Pre-fix finding:** `support_requests` was absent from
+`src/integrations/supabase/types.ts` because the generated contract on `main` had become stale.
+This PR restores the table types from the committed Supabase contract without changing application
+logic, UI, or migrations.
+
+The restored generated types expose:
+
+- `Row`: required `id`, `created_by`, `kind`, `status`, and `created_at`; nullable
+  `duration_seconds` and `note`;
+- `Insert`: required `created_by` and `kind`; optional `id`, `status`, `created_at`,
+  `duration_seconds`, and `note`;
+- `Update`: all seven fields optional;
+- `Relationships`: `created_by` references both the `profiles` table and the `profiles_public` view
+  through `support_requests_created_by_fkey`.
 
 The committed migration defines the database columns as:
 
@@ -112,10 +123,10 @@ The committed migration defines the database columns as:
 | `status` | `text`, required, default `new`, constrained to `new`, `in_progress`, or `closed` |
 | `created_at` | `timestamptz`, required, default `now()` |
 
-The existing Home insertion references this table, but the current generated contract does not
-type it. Before the implementation PR, verify the linked remote Supabase schema and regenerate
-`types.ts`. Do not work around the mismatch with `as never`, a broad `any`, or an invented local
-table type. No migration is indicated if the remote table matches the committed migration.
+The existing Home insertion is typed again. Before the implementation PR, verify that the linked
+remote Supabase schema still matches the restored committed contract. Do not work around future
+mismatches with `as never`, a broad `any`, or an invented local table type. No migration is
+indicated if the remote table matches the committed migration.
 
 ## 6. Safe delete-account MVP recommendation
 
@@ -162,8 +173,8 @@ records where required.
 
 ## 9. Recommended scope for the next implementation PR
 
-1. First verify remote Supabase and regenerate types so `support_requests` is typed; do not add SQL
-   if the committed schema is already deployed.
+1. First verify that remote Supabase matches the restored generated contract; do not add SQL if the
+   committed schema is already deployed.
 2. Add a self-only gear icon in the Profile header and a mobile-first `/profile/settings` route.
 3. Add local-only language and simplified-mode preferences with Ukrainian defaults and SSR-safe
    storage access.
@@ -185,8 +196,9 @@ redesign.
 
 ## 11. Remaining risks
 
-- The repository's generated Supabase types are stale relative to committed migrations:
-  `support_requests` is missing, and this audit did not verify the linked remote project.
+- The generated Supabase contract was stale before this PR. This PR restores the audited table,
+  review, and RPC definitions from the committed contract, but it does not verify the linked remote
+  project.
 - The proposed callback/note markers are human-operated conventions, not database-enforced request
   categories.
 - Current support-request RLS has no per-user rate limit; the UI can debounce and disable duplicate
