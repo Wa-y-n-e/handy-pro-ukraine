@@ -604,6 +604,9 @@ function ProfilePage() {
                 }
                 maxLength={200}
               />
+              <p className="text-xs text-muted-foreground">
+                Координати не змінюються тут. Оновіть точку у вкладці «Карта».
+              </p>
             </div>
             <Button onClick={saveMasterProfile} disabled={savingProfile} className="w-full">
               {savingProfile ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
