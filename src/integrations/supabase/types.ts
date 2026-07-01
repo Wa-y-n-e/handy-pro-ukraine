@@ -453,6 +453,7 @@ export type Database = {
           author_id: string
           created_at: string | null
           id: string
+          order_id: string | null
           rating: number
           target_id: string
           text: string | null
@@ -461,6 +462,7 @@ export type Database = {
           author_id: string
           created_at?: string | null
           id?: string
+          order_id?: string | null
           rating: number
           target_id: string
           text?: string | null
@@ -469,6 +471,7 @@ export type Database = {
           author_id?: string
           created_at?: string | null
           id?: string
+          order_id?: string | null
           rating?: number
           target_id?: string
           text?: string | null
@@ -486,6 +489,13 @@ export type Database = {
             columns: ["author_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
           {
@@ -530,6 +540,51 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "categories"
             referencedColumns: ["slug"]
+          },
+        ]
+      }
+      support_requests: {
+        Row: {
+          created_at: string
+          created_by: string
+          duration_seconds: number | null
+          id: string
+          kind: string
+          note: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          duration_seconds?: number | null
+          id?: string
+          kind: string
+          note?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          duration_seconds?: number | null
+          id?: string
+          kind?: string
+          note?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -652,6 +707,32 @@ export type Database = {
       }
     }
     Functions: {
+      accept_cash_offer: {
+        Args: { p_amount: number; p_chat_id: string }
+        Returns: string
+      }
+      complete_order: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
+      get_available_masters: {
+        Args: {
+          p_category_slug?: string
+          p_subcategory_id?: string
+        }
+        Returns: {
+          avatar_url: string
+          full_name: string
+          id: string
+          locked_lat: number
+          locked_lng: number
+          primary_category_slug: string
+          rating: number
+          review_count: number
+          status: Database["public"]["Enums"]["master_status"]
+          verified: boolean
+        }[]
+      }
       get_my_profile: {
         Args: never
         Returns: {
@@ -705,9 +786,29 @@ export type Database = {
         }
         Returns: boolean
       }
+      leave_order_review: {
+        Args: {
+          p_order_id: string
+          p_rating: number
+          p_text: string
+        }
+        Returns: string
+      }
+      mark_chat_read: {
+        Args: { p_chat_id: string }
+        Returns: undefined
+      }
       pay_escrow_hold: {
         Args: { p_amount: number; p_chat_id: string }
         Returns: string
+      }
+      resolve_dispute: {
+        Args: { p_chat_id: string; p_resolution: string }
+        Returns: undefined
+      }
+      start_order: {
+        Args: { p_order_id: string }
+        Returns: undefined
       }
       wallet_instant_withdraw: {
         Args: never
