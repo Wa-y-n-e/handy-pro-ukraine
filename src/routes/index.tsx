@@ -7,7 +7,7 @@ import { CATEGORY_ICONS, isCurfewNow } from "@/lib/handy";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Mic, Phone, Search, AlertTriangle, Loader2 } from "lucide-react";
+import { Mic, Phone, Search, AlertTriangle, Loader2, MessageSquareWarning } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({ component: HomePage });
@@ -129,6 +129,21 @@ function HomePage() {
           <Switch checked={grandma} onCheckedChange={setGrandma} />
         </label>
       </header>
+
+      <section className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-3">
+        <p className="text-xs leading-relaxed">
+          Це тестова версія Handy Pro. Якщо щось працює не так — повідомте нам.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => navigate({ to: "/profile/settings" })}
+          className="mt-2"
+        >
+          <MessageSquareWarning className="size-4" /> Повідомити про проблему
+        </Button>
+      </section>
 
       {curfew && (
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">

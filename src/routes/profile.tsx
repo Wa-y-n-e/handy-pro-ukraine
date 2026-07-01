@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { DEBT_BAN_THRESHOLD } from "@/lib/handy";
 import { useSession, type Profile } from "@/lib/use-session";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -115,27 +116,22 @@ function ProfilePage() {
         { data: subcategoryRows },
         { data: masterSubcategoryRows },
       ] = await Promise.all([
-          supabase.rpc("get_public_profile", { p_profile_id: id }),
-          supabase
-            .from("reviews")
-            .select(
-              "id, rating, text, created_at, author:profiles!reviews_author_id_fkey(full_name)",
-            )
-            .eq("target_id", id)
-            .order("created_at", { ascending: false })
-            .limit(20),
-          supabase
-            .from("portfolio_photos")
-            .select("id, url, position")
-            .eq("master_id", id)
-            .order("position"),
-          supabase.from("categories").select("*").order("position"),
-          supabase.from("subcategories").select("*").order("position"),
-          supabase
-            .from("master_subcategories")
-            .select("subcategory_id")
-            .eq("master_id", id),
-        ]);
+        supabase.rpc("get_public_profile", { p_profile_id: id }),
+        supabase
+          .from("reviews")
+          .select("id, rating, text, created_at, author:profiles!reviews_author_id_fkey(full_name)")
+          .eq("target_id", id)
+          .order("created_at", { ascending: false })
+          .limit(20),
+        supabase
+          .from("portfolio_photos")
+          .select("id, url, position")
+          .eq("master_id", id)
+          .order("position"),
+        supabase.from("categories").select("*").order("position"),
+        supabase.from("subcategories").select("*").order("position"),
+        supabase.from("master_subcategories").select("subcategory_id").eq("master_id", id),
+      ]);
       const publicProfile = publicRows?.[0] ?? null;
       if (profileError || !publicProfile) {
         toast.error("Не вдалося завантажити профіль");
@@ -162,7 +158,9 @@ function ProfilePage() {
       const selectedIds = (masterSubcategoryRows ?? []).map((row) => row.subcategory_id);
       setSavedSubcategoryIds(selectedIds);
       setSelectedSubcategoryIds(selectedIds);
-      setServiceCategory(privateProfile?.primary_category_slug ?? publicProfile.primary_category_slug ?? "");
+      setServiceCategory(
+        privateProfile?.primary_category_slug ?? publicProfile.primary_category_slug ?? "",
+      );
       if (isSelf && role === "master" && privateProfile) {
         setDraft({
           full_name: privateProfile.full_name ?? "",
@@ -194,9 +192,31 @@ function ProfilePage() {
     return subcategories.filter((subcategory) => selected.has(subcategory.id));
   }, [savedSubcategoryIds, subcategories]);
 
+  const masterReadiness = useMemo(() => {
+    if (!target || !isSelf || role !== "master") return null;
+    const hasLocation =
+      target.locked_lat != null &&
+      Number.isFinite(target.locked_lat) &&
+      target.locked_lat >= -90 &&
+      target.locked_lat <= 90 &&
+      target.locked_lng != null &&
+      Number.isFinite(target.locked_lng) &&
+      target.locked_lng >= -180 &&
+      target.locked_lng <= 180;
+    const checks = [
+      { label: "Ім'я заповнено", ready: Boolean(target.full_name?.trim()) },
+      { label: "Категорію обрано", ready: Boolean(target.primary_category_slug) },
+      { label: "Підкатегорію обрано", ready: savedSubcategoryIds.length > 0 },
+      { label: "Локацію збережено", ready: hasLocation },
+      { label: "Доступність увімкнено", ready: target.status === "free" },
+      { label: "Профіль не призупинено", ready: target.wallet_balance > DEBT_BAN_THRESHOLD },
+    ];
+    return { checks, complete: checks.every((check) => check.ready) };
+  }, [isSelf, role, savedSubcategoryIds.length, target]);
+
   const toggleStatus = async (free: boolean) => {
     if (!me) return;
-    if (free && me.wallet_balance <= -400) {
+    if (free && me.wallet_balance <= DEBT_BAN_THRESHOLD) {
       toast.error("Профіль призупинено через борг");
       return;
     }
@@ -472,7 +492,8 @@ function ProfilePage() {
               {isMaster && (
                 <>
                   <p className="mt-1 flex items-center gap-1 text-xs text-white/80">
-                    <Layers3 className="size-4" /> {primaryCategory?.name_uk ?? "Категорію не вказано"}
+                    <Layers3 className="size-4" />{" "}
+                    {primaryCategory?.name_uk ?? "Категорію не вказано"}
                   </p>
                   <p className="mt-1 flex items-center gap-1 text-xs text-white/75">
                     <span
@@ -497,12 +518,67 @@ function ProfilePage() {
         </div>
       </section>
 
+      {masterReadiness && (
+        <section
+          className="rounded-lg border bg-card p-4 shadow-sm"
+          aria-labelledby="readiness-title"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 id="readiness-title" className="text-sm font-semibold">
+                Готовність профілю майстра
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {masterReadiness.complete
+                  ? "Профіль готовий і може відображатися клієнтам на карті."
+                  : "Завершіть обов'язкові кроки, щоб клієнти могли знайти вас на карті."}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-xs font-semibold">
+              {masterReadiness.checks.filter((check) => check.ready).length}/
+              {masterReadiness.checks.length}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {masterReadiness.checks.map((check) => (
+              <ReadinessItem key={check.label} {...check} />
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Портфоліо необов'язкове, але допомагає клієнтам обрати майстра.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                document
+                  .getElementById("master-profile-editor")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+            >
+              <PencilLine className="size-4" /> Заповнити профіль
+            </Button>
+            <Button type="button" variant="outline" onClick={() => navigate({ to: "/map" })}>
+              <MapPin className="size-4" /> Оновити локацію на карті
+            </Button>
+            <Button
+              type="button"
+              onClick={() => toggleStatus(true)}
+              disabled={target.status === "free" || target.wallet_balance <= DEBT_BAN_THRESHOLD}
+            >
+              <CheckCircle2 className="size-4" /> Увімкнути доступність
+            </Button>
+          </div>
+        </section>
+      )}
+
       {isSelf && role === "master" && (
         <section className="flex items-center justify-between gap-4 rounded-lg border border-primary/25 bg-primary/5 p-4">
           <div className="min-w-0">
             <p className="font-semibold">Доступний для замовлень</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {target.wallet_balance <= -400
+              {target.wallet_balance <= DEBT_BAN_THRESHOLD
                 ? "Профіль призупинено через борг"
                 : target.status === "free"
                   ? "Ваш маркер видно на карті"
@@ -512,14 +588,18 @@ function ProfilePage() {
           <Switch
             checked={target.status === "free"}
             onCheckedChange={toggleStatus}
-            disabled={target.wallet_balance <= -400}
+            disabled={target.wallet_balance <= DEBT_BAN_THRESHOLD}
             aria-label="Доступний для замовлень"
           />
         </section>
       )}
 
       {isSelf && role === "master" && draft && (
-        <section className="rounded-lg border bg-card p-4 shadow-sm" aria-labelledby="edit-profile-title">
+        <section
+          id="master-profile-editor"
+          className="rounded-lg border bg-card p-4 shadow-sm"
+          aria-labelledby="edit-profile-title"
+        >
           <div className="mb-4 flex items-center gap-2">
             <PencilLine className="size-4 text-primary" />
             <h2 id="edit-profile-title" className="text-sm font-semibold">
@@ -618,7 +698,11 @@ function ProfilePage() {
               </p>
             </div>
             <Button onClick={saveMasterProfile} disabled={savingProfile} className="w-full">
-              {savingProfile ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              {savingProfile ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
               Зберегти
             </Button>
           </div>
@@ -680,7 +764,11 @@ function ProfilePage() {
                 </div>
               )}
               <Button onClick={saveServices} disabled={savingServices} className="w-full">
-                {savingServices ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                {savingServices ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
                 Зберегти послуги
               </Button>
             </div>
@@ -778,7 +866,10 @@ function ProfilePage() {
           {photos.length > 0 ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {photos.map((photo) => (
-                <figure key={photo.id} className="group relative aspect-[4/3] overflow-hidden rounded-lg border bg-muted">
+                <figure
+                  key={photo.id}
+                  className="group relative aspect-[4/3] overflow-hidden rounded-lg border bg-muted"
+                >
                   <img
                     src={photo.url}
                     alt="Приклад виконаної роботи"
@@ -863,7 +954,18 @@ function ProfilePage() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
 
+function ReadinessItem({ label, ready }: { label: string; ready: boolean }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <CheckCircle2
+        className={`size-4 shrink-0 ${ready ? "text-emerald-600" : "text-muted-foreground/45"}`}
+        aria-hidden="true"
+      />
+      <span className={ready ? "text-foreground" : "text-muted-foreground"}>{label}</span>
     </div>
   );
 }
